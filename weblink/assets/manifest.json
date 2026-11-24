@@ -1,0 +1,37 @@
+{
+	"Name": "Web Link",
+	"Description": "Open a website with one press. The key shows the site's own logo, fetched automatically.",
+	"Author": "gauravk-in",
+	"Version": "0.4.0.0",
+	"SDKVersion": 2,
+	"UUID": "io.github.gauravk-in.weblink",
+	"URL": "https://github.com/gauravk-in/OpenDeckPlugins/tree/main/weblink",
+	"Icon": "icons/plugin",
+	"Category": "Web Link",
+	"CategoryIcon": "icons/category",
+	"CodePaths": {
+		"x86_64-apple-darwin": "bin/opendeck-weblink-mac",
+		"aarch64-apple-darwin": "bin/opendeck-weblink-mac",
+		"x86_64-unknown-linux-gnu": "bin/opendeck-weblink-linux-x86_64",
+		"aarch64-unknown-linux-gnu": "bin/opendeck-weblink-linux-aarch64"
+	},
+	"CodePathMac": "bin/opendeck-weblink-mac",
+	"CodePathLin": "bin/opendeck-weblink-linux-x86_64",
+	"OS": [
+		{ "Platform": "mac", "MinimumVersion": "11.0" },
+		{ "Platform": "linux" }
+	],
+	"Software": { "MinimumVersion": "6.5" },
+	"Actions": [
+		{
+			"UUID": "io.github.gauravk-in.weblink.open",
+			"Name": "Website",
+			"Tooltip": "Open a website; the key shows its logo",
+			"Icon": "icons/action",
+			"PropertyInspectorPath": "propertyInspector/open.html",
+			"Controllers": ["Keypad", "Encoder"],
+			"SupportedInMultiActions": true,
+			"States": [{ "Image": "icons/key", "ShowTitle": true }]
+		}
+	]
+}

@@ -1,0 +1,45 @@
+name: Ajazz AKP03 / Mirabox N3 (incl. Streonor S6)
+
+on:
+  push:
+    branches: [main]
+    paths: ["opendeck-akp03/**", ".github/workflows/opendeck-akp03.yml"]
+    tags: ["opendeck-akp03-v*"]
+  pull_request:
+    paths: ["opendeck-akp03/**", ".github/workflows/opendeck-akp03.yml"]
+  workflow_dispatch:
+
+defaults:
+  run:
+    working-directory: opendeck-akp03
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: aarch64-unknown-linux-gnu,x86_64-unknown-linux-gnu,x86_64-apple-darwin,aarch64-apple-darwin
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: opendeck-akp03
+      - name: Install zig, cargo-zigbuild and a macOS SDK
+        run: |
+          pip install ziglang
+          cargo install --locked cargo-zigbuild
+          curl -fsSL https://github.com/joseluisq/macosx-sdks/releases/download/13.3/MacOSX13.3.sdk.tar.xz | tar -xJ -C "$RUNNER_TEMP"
+          echo "SDKROOT=$RUNNER_TEMP/MacOSX13.3.sdk" >> "$GITHUB_ENV"
+      - name: Test
+        run: cargo test --release
+      - name: Package
+        run: scripts/package.sh
+      - uses: actions/upload-artifact@v4
+        with:
+          name: opendeck-akp03-plugin
+          path: opendeck-akp03/dist/*.zip
+      - name: Release
+        if: startsWith(github.ref, 'refs/tags/opendeck-akp03-v')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: opendeck-akp03/dist/*.zip

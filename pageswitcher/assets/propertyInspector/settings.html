@@ -1,0 +1,76 @@
+<!doctype html>
+<html lang="en">
+	<head>
+		<meta charset="utf-8" />
+		<style>
+			/* OpenDeck always shows the inspector on a dark background. */
+			:root { color-scheme: dark; --fg: #d4d4d4; --muted: #a3a3a3; --field: #404040; --border: #525252; }
+			body { margin: 0; padding: 8px 10px; font: 13px/1.4 system-ui, -apple-system, "Segoe UI", sans-serif; color: var(--fg); background: transparent; }
+			label.check { display: flex; align-items: center; gap: 8px; margin: 6px 0; }
+			.row { display: flex; align-items: center; gap: 8px; margin: 6px 0; }
+			.row > label { flex: 0 0 110px; color: var(--muted); }
+			select { flex: 1; padding: 4px 6px; border-radius: 4px; border: 1px solid var(--border); background: var(--field); color: var(--fg); font: inherit; }
+			.hint { color: var(--muted); font-size: 11px; margin: 10px 0 0; }
+			[hidden] { display: none !important; }
+		</style>
+		<script>
+			let websocket = null;
+			let actionInfo = null;
+			const $ = (id) => document.getElementById(id);
+
+			function load(s) {
+				$("wrap").checked = s.wrap ?? true;
+				$("sameFolder").checked = s.sameFolder ?? false;
+				$("reverse").checked = s.reverse ?? false;
+				$("press").value = s.press ?? "first";
+				$("showName").checked = s.showName ?? true;
+			}
+
+			function save() {
+				websocket?.send(
+					JSON.stringify({
+						event: "setSettings",
+						context: actionInfo.context,
+						payload: {
+							wrap: $("wrap").checked,
+							sameFolder: $("sameFolder").checked,
+							reverse: $("reverse").checked,
+							press: $("press").value,
+							showName: $("showName").checked,
+						},
+					}),
+				);
+			}
+
+			function connectElgatoStreamDeckSocket(inPort, inUUID, inRegisterEvent, inInfo, inActionInfo) {
+				actionInfo = JSON.parse(inActionInfo);
+				const isDial = actionInfo.action.endsWith(".dial");
+				for (const el of document.querySelectorAll(".dial")) el.hidden = !isDial;
+				for (const el of document.querySelectorAll(".key")) el.hidden = isDial;
+				load(actionInfo.payload.settings ?? {});
+				websocket = new WebSocket("ws://127.0.0.1:" + inPort);
+				websocket.onopen = () => websocket.send(JSON.stringify({ event: inRegisterEvent, uuid: inUUID }));
+				websocket.onmessage = (msg) => {
+					const data = JSON.parse(msg.data);
+					if (data.event === "didReceiveSettings") load(data.payload.settings ?? {});
+				};
+			}
+			const connectOpenActionSocket = connectElgatoStreamDeckSocket;
+		</script>
+	</head>
+	<body>
+		<label class="check"><input id="wrap" type="checkbox" onchange="save()" /> After the last page, go back to the first</label>
+		<label class="check"><input id="sameFolder" type="checkbox" onchange="save()" /> Stay inside the current page's folder</label>
+		<label class="check dial"><input id="reverse" type="checkbox" onchange="save()" /> Reverse turning direction</label>
+		<div class="row dial">
+			<label for="press">Pressing the dial</label>
+			<select id="press" onchange="save()">
+				<option value="first">Goes to the first page</option>
+				<option value="none">Does nothing</option>
+			</select>
+		</div>
+		<label class="check key"><input id="showName" type="checkbox" onchange="save()" /> Show the name of the page it leads to</label>
+		<p class="hint">Pages follow the order you set by dragging them in Edit profiles. Without a custom order, they go alphabetically.</p>
+		<p class="hint">Tip: right-click this action and choose "Show on every profile" so it is on every page automatically.</p>
+	</body>
+</html>
