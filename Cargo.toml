@@ -1,0 +1,30 @@
+[package]
+name = "opendeck-weblink"
+version = "0.1.0"
+edition = "2024"
+license = "MIT"
+description = "OpenDeck plugin: open a URL and show the website's logo on the key"
+
+[dependencies]
+openaction = "2.8"
+tokio = { version = "1", features = ["rt-multi-thread", "macros", "sync", "time", "fs"] }
+reqwest = { version = "0.12", default-features = false, features = ["rustls-tls", "gzip", "brotli", "deflate", "json"] }
+scraper = "0.20"
+url = "2"
+image = { version = "0.25", default-features = false, features = ["png", "jpeg", "ico", "gif", "webp", "bmp"] }
+resvg = "0.45"
+ab_glyph = "0.2"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+base64 = "0.22"
+sha1_smol = "1"
+dirs = "6"
+log = "0.4"
+simplelog = "0.12"
+dashmap = "6"
+
+[profile.release]
+opt-level = 3
+lto = true
+codegen-units = 1
+strip = true
