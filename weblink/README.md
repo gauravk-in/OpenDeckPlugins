@@ -24,7 +24,7 @@ The built-in *Open URL* action in OpenDeck's starter pack opens links but leaves
 
 ## Install
 
-1. Download `opendeck-weblink.zip` from the [latest release](../../releases) (or the build artifact of the latest workflow run).
+1. Download `opendeck-weblink.zip` from the [latest release](https://github.com/gauravk-in/OpenDeckPlugins/releases) (or the build artifact of the latest workflow run).
 2. In OpenDeck open **Plugins**, choose **Install from file**, and pick the zip.
 3. Drag **Web Link → Website** onto a key and type an address.
 
@@ -34,10 +34,11 @@ The built-in *Open URL* action in OpenDeck's starter pack opens links but leaves
 pip install ziglang
 cargo install cargo-zigbuild
 rustup target add aarch64-unknown-linux-gnu x86_64-unknown-linux-gnu x86_64-apple-darwin aarch64-apple-darwin
-scripts/package.sh           # -> dist/opendeck-weblink.zip
+cd weblink
+scripts/package.sh           # -> weblink/dist/opendeck-weblink.zip
 ```
 
-Everything cross-compiles from Linux; no macOS machine is needed. GitHub Actions builds the zip on every push and attaches it to a release for `v*` tags.
+Everything cross-compiles from Linux; no macOS machine is needed. GitHub Actions (`.github/workflows/weblink.yml` at the repo root) builds the zip when this folder changes and attaches it to a release for `weblink-v*` tags.
 
 Debug helper, to see which logo a site resolves to without OpenDeck:
 

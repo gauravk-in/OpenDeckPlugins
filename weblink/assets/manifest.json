@@ -5,7 +5,7 @@
 	"Version": "0.4.0.0",
 	"SDKVersion": 2,
 	"UUID": "io.github.gauravk-in.weblink",
-	"URL": "https://github.com/gauravk-in/opendeck-weblink",
+	"URL": "https://github.com/gauravk-in/OpenDeckPlugins/tree/main/weblink",
 	"Icon": "icons/plugin",
 	"Category": "Web Link",
 	"CategoryIcon": "icons/category",
