@@ -46,7 +46,8 @@ Read [this wiki page](https://github.com/4ndv/opendeck-akp03/wiki/Adding-support
 You'll need:
 
 - A Linux OS of some sort
-- Rust 1.87 and up with `x86_64-unknown-linux-gnu` and `x86_64-pc-windows-gnu` targets installed
+- Rust 1.87 and up with `x86_64-unknown-linux-gnu`, `aarch64-unknown-linux-gnu` and `x86_64-pc-windows-gnu` targets installed
+- gcc for aarch64 (`aarch64-linux-gnu-gcc`), for Raspberry Pi and other ARM64 Linux builds
 - gcc with Windows support
 - Docker
 - [just](https://just.systems)
@@ -62,6 +63,7 @@ Adding rust targets:
 ```sh
 rustup target add x86_64-pc-windows-gnu
 rustup target add x86_64-unknown-linux-gnu
+rustup target add aarch64-unknown-linux-gnu
 ```
 
 ### Building a release package

@@ -7,6 +7,9 @@
   "CodePathLin": "opendeck-akp03-linux",
   "CodePathMac": "opendeck-akp03-mac",
   "CodePathWin": "opendeck-akp03-win.exe",
+  "CodePaths": {
+    "aarch64-unknown-linux-gnu": "opendeck-akp03-linux-aarch64"
+  },
   "Icon": "assets/icon",
   "Category": "Hardware",
   "OS": [
