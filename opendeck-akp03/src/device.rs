@@ -142,7 +142,10 @@ async fn device_events_task(candidate: &CandidateDevice) -> Result<(), MirajazzE
 
     let devices_lock = DEVICES.read().await;
     let reader = match devices_lock.get(&candidate.id) {
-        Some(device) => device.get_reader(crate::inputs::process_input),
+        Some(device) => device.get_reader(match candidate.kind {
+            Kind::StreonorS6 => crate::inputs::process_input_streonor_s6,
+            _ => crate::inputs::process_input,
+        }),
         None => return Ok(()),
     };
     drop(devices_lock);

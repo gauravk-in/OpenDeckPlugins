@@ -83,3 +83,20 @@ fn read_encoder_press(input: u8, state: u8) -> Result<DeviceInput, MirajazzError
     encoder_states[encoder] = state != 0;
     Ok(DeviceInput::EncoderStateChange(encoder_states))
 }
+
+/// Streonor S6: the big knob sits above the two small ones, so list it first.
+/// OpenDeck dials then read big, small left, small right instead of
+/// small left, big, small right.
+pub fn process_input_streonor_s6(input: u8, state: u8) -> Result<DeviceInput, MirajazzError> {
+    Ok(match process_input(input, state)? {
+        DeviceInput::EncoderTwist(mut values) => {
+            values.swap(0, 1);
+            DeviceInput::EncoderTwist(values)
+        }
+        DeviceInput::EncoderStateChange(mut states) => {
+            states.swap(0, 1);
+            DeviceInput::EncoderStateChange(states)
+        }
+        other => other,
+    })
+}
