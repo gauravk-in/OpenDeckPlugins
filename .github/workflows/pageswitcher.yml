@@ -1,0 +1,43 @@
+name: Page Switcher
+
+on:
+  push:
+    branches: [main]
+    paths: ["pageswitcher/**", ".github/workflows/pageswitcher.yml"]
+    tags: ["pageswitcher-v*"]
+  pull_request:
+    paths: ["pageswitcher/**", ".github/workflows/pageswitcher.yml"]
+  workflow_dispatch:
+
+defaults:
+  run:
+    working-directory: pageswitcher
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: aarch64-unknown-linux-gnu,x86_64-unknown-linux-gnu,x86_64-apple-darwin,aarch64-apple-darwin
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: pageswitcher
+      - name: Install zig and cargo-zigbuild
+        run: |
+          pip install ziglang
+          cargo install --locked cargo-zigbuild
+      - name: Test
+        run: cargo test --release
+      - name: Package
+        run: scripts/package.sh
+      - uses: actions/upload-artifact@v4
+        with:
+          name: opendeck-pageswitcher-plugin
+          path: pageswitcher/dist/*.zip
+      - name: Release
+        if: startsWith(github.ref, 'refs/tags/pageswitcher-v')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: pageswitcher/dist/*.zip
