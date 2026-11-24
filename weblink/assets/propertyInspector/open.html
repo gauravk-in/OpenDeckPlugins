@@ -1,0 +1,191 @@
+<!doctype html>
+<html lang="en">
+	<head>
+		<meta charset="utf-8" />
+		<style>
+			:root {
+				color-scheme: light dark;
+				--fg: #e6e6e6;
+				--muted: #9a9a9a;
+				--field: #3d3d3d;
+				--border: #555;
+				--accent: #4f8ef7;
+			}
+			@media (prefers-color-scheme: light) {
+				:root { --fg: #222; --muted: #666; --field: #fff; --border: #bbb; }
+			}
+			body { margin: 0; padding: 8px 10px; font: 13px/1.4 system-ui, -apple-system, "Segoe UI", sans-serif; color: var(--fg); background: transparent; }
+			.row { display: flex; align-items: center; gap: 8px; margin: 6px 0; }
+			.row > label:first-child { flex: 0 0 96px; color: var(--muted); }
+			.row > .value { flex: 1; min-width: 0; display: flex; gap: 6px; align-items: center; }
+			input[type="text"], input[type="url"], select { flex: 1; min-width: 0; box-sizing: border-box; padding: 4px 6px; border-radius: 4px; border: 1px solid var(--border); background: var(--field); color: var(--fg); font: inherit; }
+			input[type="color"] { width: 32px; height: 24px; padding: 0; border: 1px solid var(--border); border-radius: 4px; background: none; }
+			input[type="range"] { flex: 1; }
+			button { padding: 4px 10px; border-radius: 4px; border: 1px solid var(--border); background: var(--field); color: var(--fg); font: inherit; cursor: pointer; }
+			button:hover { border-color: var(--accent); }
+			.preview { display: flex; gap: 10px; align-items: center; margin: 10px 0 4px; }
+			.preview img { width: 56px; height: 56px; border-radius: 8px; background: #000; object-fit: cover; flex: none; }
+			.preview img[src=""] { visibility: hidden; }
+			#status { color: var(--muted); font-size: 12px; overflow-wrap: anywhere; }
+			details { margin-top: 8px; }
+			summary { cursor: pointer; color: var(--muted); margin-bottom: 4px; }
+			.hint { color: var(--muted); font-size: 11px; margin: -2px 0 6px 104px; }
+		</style>
+		<script>
+			let websocket = null;
+			let actionInfo = null;
+			const $ = (id) => document.getElementById(id);
+
+			function settings() {
+				const bgChoice = $("bgChoice").value;
+				return {
+					url: $("url").value.trim(),
+					caption: $("caption").value.trim(),
+					openWith: $("openWith").value,
+					reuseTab: $("reuseTab").checked,
+					logoUrl: $("logoUrl").value.trim(),
+					background: bgChoice === "custom" ? $("bgColour").value : bgChoice,
+					padding: Number($("padding").value),
+					showLogo: $("showLogo").checked,
+					onlineFallback: $("onlineFallback").checked,
+				};
+			}
+
+			function save() {
+				if (!websocket) return;
+				$("paddingValue").textContent = $("padding").value + "%";
+				$("bgColour").style.display = $("bgChoice").value === "custom" ? "" : "none";
+				websocket.send(JSON.stringify({ event: "setSettings", context: actionInfo.context, payload: settings() }));
+			}
+
+			function refreshLogo() {
+				websocket?.send(JSON.stringify({ event: "sendToPlugin", action: actionInfo.action, context: actionInfo.context, payload: { action: "refresh" } }));
+			}
+
+			let savedOpenWith = "";
+			function setOpenWith(value) {
+				savedOpenWith = value;
+				const sel = $("openWith");
+				if (value && ![...sel.options].some((o) => o.value === value)) {
+					// Profile not detected (yet): keep it selectable so saving doesn't lose it.
+					sel.add(new Option(value.replace(":", ": "), value));
+				}
+				sel.value = value;
+			}
+
+			function setProfiles(profiles) {
+				const sel = $("openWith");
+				sel.length = 1;
+				for (const p of profiles) sel.add(new Option(p.label, p.value));
+				setOpenWith(savedOpenWith);
+			}
+
+			function load(s) {
+				$("url").value = s.url ?? "";
+				$("caption").value = s.caption ?? "";
+				setOpenWith(s.openWith ?? "");
+				$("reuseTab").checked = s.reuseTab ?? false;
+				$("logoUrl").value = s.logoUrl ?? "";
+				const bg = s.background ?? "auto";
+				if (bg.startsWith("#")) {
+					$("bgChoice").value = "custom";
+					$("bgColour").value = bg.length === 7 ? bg : "#000000";
+				} else {
+					$("bgChoice").value = ["auto", "black", "white"].includes(bg) ? bg : "auto";
+				}
+				$("bgColour").style.display = $("bgChoice").value === "custom" ? "" : "none";
+				$("padding").value = s.padding ?? 12;
+				$("paddingValue").textContent = $("padding").value + "%";
+				$("showLogo").checked = s.showLogo ?? true;
+				$("onlineFallback").checked = s.onlineFallback ?? true;
+			}
+
+			function connectElgatoStreamDeckSocket(inPort, inUUID, inRegisterEvent, inInfo, inActionInfo) {
+				actionInfo = JSON.parse(inActionInfo);
+				load(actionInfo.payload.settings ?? {});
+				websocket = new WebSocket("ws://127.0.0.1:" + inPort);
+				websocket.onopen = () => websocket.send(JSON.stringify({ event: inRegisterEvent, uuid: inUUID }));
+				websocket.onmessage = (msg) => {
+					const data = JSON.parse(msg.data);
+					if (data.event === "sendToPropertyInspector") {
+						const p = data.payload ?? {};
+						if (p.profiles) setProfiles(p.profiles);
+						if (p.status) $("status").textContent = p.status;
+						if (p.preview) $("preview").src = p.preview;
+					} else if (data.event === "didReceiveSettings") {
+						load(data.payload.settings ?? {});
+					}
+				};
+			}
+			const connectOpenActionSocket = connectElgatoStreamDeckSocket;
+		</script>
+	</head>
+	<body>
+		<div class="row">
+			<label for="url">Website</label>
+			<div class="value"><input id="url" type="text" placeholder="github.com" onchange="save()" /></div>
+		</div>
+		<div class="hint">Press Enter or click away to fetch the logo. http:// for local devices.</div>
+
+		<div class="row">
+			<label for="caption">Caption</label>
+			<div class="value"><input id="caption" type="text" placeholder="Optional, e.g. Pull requests" onchange="save()" /></div>
+		</div>
+		<div class="hint">Shrinks the logo and writes this underneath. Leave OpenDeck's own Title empty.</div>
+
+		<div class="row">
+			<label for="openWith">Open with</label>
+			<div class="value">
+				<select id="openWith" onchange="save()">
+					<option value="">Default browser</option>
+				</select>
+			</div>
+		</div>
+
+		<div class="row">
+			<label></label>
+			<div class="value"><label><input id="reuseTab" type="checkbox" onchange="save()" /> Switch to the tab if it's already open (macOS)</label></div>
+		</div>
+
+		<div class="preview">
+			<img id="preview" src="" alt="" />
+			<div>
+				<div id="status">Enter a website address</div>
+				<div style="margin-top: 6px"><button onclick="refreshLogo()">Fetch logo again</button></div>
+			</div>
+		</div>
+
+		<div class="row">
+			<label for="bgChoice">Background</label>
+			<div class="value">
+				<select id="bgChoice" onchange="save()">
+					<option value="auto">Automatic</option>
+					<option value="black">Black</option>
+					<option value="white">White</option>
+					<option value="custom">Custom colour</option>
+				</select>
+				<input id="bgColour" type="color" value="#000000" onchange="save()" style="display: none" />
+			</div>
+		</div>
+		<div class="row">
+			<label for="padding">Logo padding</label>
+			<div class="value"><input id="padding" type="range" min="0" max="30" step="1" value="12" onchange="save()" oninput="$('paddingValue').textContent = this.value + '%'" /><span id="paddingValue">12%</span></div>
+		</div>
+
+		<details>
+			<summary>Advanced</summary>
+			<div class="row">
+				<label for="logoUrl">Custom logo</label>
+				<div class="value"><input id="logoUrl" type="text" placeholder="https://…/logo.png (optional)" onchange="save()" /></div>
+			</div>
+			<div class="row">
+				<label></label>
+				<div class="value"><label><input id="showLogo" type="checkbox" checked onchange="save()" /> Show the logo on the key</label></div>
+			</div>
+			<div class="row">
+				<label></label>
+				<div class="value"><label><input id="onlineFallback" type="checkbox" checked onchange="save()" /> Ask Google's favicon service if the site has no icon</label></div>
+			</div>
+		</details>
+	</body>
+</html>
