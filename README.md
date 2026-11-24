@@ -45,3 +45,15 @@ cargo run --release -- --probe github.com /tmp/github.png
 ## Licence
 
 MIT. Bundles the DejaVu Sans Bold font for letter tiles (see `fonts/DejaVu-LICENSE.txt`).
+
+## Testing checklist
+
+1. Install the zip (see above) and drag **Website** onto a key.
+2. Type `github.com` and press Enter. Within a couple of seconds the key and the preview in the settings panel show the GitHub logo, with "Logo from …" naming where it came from.
+3. Press the key: the site opens in your default browser.
+4. Try a local device, e.g. `http://homeassistant.local:8123`. A self-signed certificate is fine.
+5. Try something with no icon, e.g. `http://192.168.1.1` on a bare router page: you get a letter tile.
+6. Change **Background** and **Logo padding** and watch the key update. **Fetch logo again** re-downloads it.
+7. Restart OpenDeck: keys come back instantly from the cache.
+
+Plugin logs: OpenDeck's log folder, `plugins/io.github.gauravk-in.weblink.sdPlugin.log`.
