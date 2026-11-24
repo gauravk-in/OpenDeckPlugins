@@ -1,0 +1,51 @@
+{
+	"Name": "tado° Thermostats",
+	"Description": "Show your tado° rooms on keys with their current and target temperature. Press a room to select it, then turn a dial to change its temperature.",
+	"Author": "gauravk-in",
+	"Version": "0.1.0",
+	"SDKVersion": 2,
+	"UUID": "io.github.gauravk-in.tado",
+	"URL": "https://github.com/gauravk-in/OpenDeckPlugins/tree/main/tado",
+	"Icon": "icons/plugin",
+	"Category": "tado°",
+	"CategoryIcon": "icons/category",
+	"CodePaths": {
+		"x86_64-apple-darwin": "bin/opendeck-tado-mac",
+		"aarch64-apple-darwin": "bin/opendeck-tado-mac",
+		"x86_64-unknown-linux-gnu": "bin/opendeck-tado-linux-x86_64",
+		"aarch64-unknown-linux-gnu": "bin/opendeck-tado-linux-aarch64"
+	},
+	"CodePathMac": "bin/opendeck-tado-mac",
+	"CodePathLin": "bin/opendeck-tado-linux-x86_64",
+	"OS": [
+		{ "Platform": "mac", "MinimumVersion": "11.0" },
+		{ "Platform": "linux" }
+	],
+	"Software": { "MinimumVersion": "6.5" },
+	"Actions": [
+		{
+			"UUID": "io.github.gauravk-in.tado.room",
+			"Name": "Room",
+			"Tooltip": "Shows a room's temperature. Press to select it for the temperature dial.",
+			"Icon": "icons/room",
+			"PropertyInspectorPath": "propertyInspector/settings.html",
+			"Controllers": ["Keypad"],
+			"SupportedInMultiActions": false,
+			"States": [{ "Image": "icons/room", "ShowTitle": false }]
+		},
+		{
+			"UUID": "io.github.gauravk-in.tado.dial",
+			"Name": "Temperature dial",
+			"Tooltip": "Turn to change the selected room's temperature, press to go back to its schedule",
+			"Icon": "icons/dial",
+			"PropertyInspectorPath": "propertyInspector/settings.html",
+			"Controllers": ["Encoder"],
+			"SupportedInMultiActions": false,
+			"Encoder": {
+				"Icon": "icons/dial",
+				"TriggerDescription": { "Rotate": "Change temperature", "Push": "Back to schedule" }
+			},
+			"States": [{ "Image": "icons/dial" }]
+		}
+	]
+}

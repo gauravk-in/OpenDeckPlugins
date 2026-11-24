@@ -5,5 +5,6 @@ Plugins for [OpenDeck](https://github.com/gauravk-in/OpenDeck), one per folder. 
 | Plugin | Folder | What it does |
 | --- | --- | --- |
 | Page Switcher | [`pageswitcher/`](pageswitcher) | Move between pages (profiles) in order with a dial or Next/Previous keys |
+| tado° Thermostats | [`tado/`](tado) | Show tado° rooms on keys and set their temperature with a dial |
 
 Each plugin has a GitHub Actions workflow in `.github/workflows/<folder>.yml`. It runs when files in that folder change, and it publishes a release when you push a tag named `<folder>-v<version>` (for example `pageswitcher-v0.1.0`).
