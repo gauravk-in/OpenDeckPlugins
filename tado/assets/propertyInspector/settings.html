@@ -1,0 +1,209 @@
+<!doctype html>
+<html lang="en">
+	<head>
+		<meta charset="utf-8" />
+		<style>
+			/* OpenDeck always shows the inspector on a dark background. */
+			:root { color-scheme: dark; --fg: #d4d4d4; --muted: #a3a3a3; --field: #404040; --border: #525252; --accent: #ff9628; --error: #f87171; }
+			body { margin: 0; padding: 8px 10px; font: 13px/1.4 system-ui, -apple-system, "Segoe UI", sans-serif; color: var(--fg); background: transparent; }
+			h3 { margin: 12px 0 6px; font-size: 11px; text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted); }
+			h3:first-child { margin-top: 0; }
+			.row { display: flex; align-items: center; gap: 8px; margin: 6px 0; }
+			.row > label { flex: 0 0 110px; color: var(--muted); }
+			label.check { display: flex; align-items: center; gap: 8px; margin: 6px 0; }
+			select, input[type="text"] { flex: 1; min-width: 0; padding: 4px 6px; border-radius: 4px; border: 1px solid var(--border); background: var(--field); color: var(--fg); font: inherit; }
+			button { padding: 5px 10px; border-radius: 4px; border: 1px solid var(--border); background: var(--field); color: var(--fg); font: inherit; cursor: pointer; }
+			button.primary { background: var(--accent); border-color: var(--accent); color: #1a1a1a; font-weight: 600; }
+			.buttons { display: flex; gap: 6px; flex-wrap: wrap; margin: 6px 0; }
+			.code { font: 600 22px/1.2 ui-monospace, Menlo, monospace; letter-spacing: 0.15em; color: var(--accent); margin: 4px 0; }
+			.qr svg { width: 140px; height: 140px; border-radius: 4px; }
+			.hint { color: var(--muted); font-size: 11px; margin: 6px 0 0; }
+			.error { color: var(--error); font-size: 12px; margin: 6px 0; }
+			a { color: var(--accent); word-break: break-all; }
+			[hidden] { display: none !important; }
+		</style>
+		<script>
+			let websocket = null;
+			let actionInfo = null;
+			let pluginUUID = null;
+			let isDial = false;
+			let status = null;
+			let settings = {};
+			const $ = (id) => document.getElementById(id);
+
+			function toPlugin(payload) {
+				websocket?.send(JSON.stringify({ event: "sendToPlugin", action: actionInfo.action, context: actionInfo.context, payload }));
+			}
+
+			function saveSettings(payload) {
+				settings = payload;
+				websocket?.send(JSON.stringify({ event: "setSettings", context: actionInfo.context, payload }));
+			}
+
+			function openLink(event) {
+				event.preventDefault();
+				websocket?.send(JSON.stringify({ event: "openUrl", payload: { url: event.target.href } }));
+			}
+
+			function renderStatus() {
+				const s = status ?? { signedIn: false, homes: [] };
+				const login = s.login;
+				$("signedOut").hidden = s.signedIn || !!login;
+				$("loggingIn").hidden = !login;
+				$("signedIn").hidden = !s.signedIn || !!login;
+				if (login) {
+					$("userCode").textContent = login.userCode;
+					$("loginLink").href = login.url;
+					$("loginLink").textContent = login.url;
+					$("qr").innerHTML = login.qr ?? "";
+				}
+				$("quota").textContent = s.remaining == null ? "" : ` · ${s.remaining} tado° requests left today`;
+				$("error").textContent = s.error ?? "";
+				$("error").hidden = !s.error;
+				$("interval").value = String(s.intervalMin ?? 30);
+				renderRooms();
+			}
+
+			function renderRooms() {
+				const select = $("room");
+				const homes = status?.homes ?? [];
+				const current = settings.home != null && settings.room != null ? `${settings.home}:${settings.room}` : "";
+				select.innerHTML = "";
+				const none = new Option(homes.length ? "Choose a room…" : status?.signedIn ? "Loading rooms…" : "Sign in to see rooms", "");
+				select.add(none);
+				for (const home of homes) {
+					const group = document.createElement("optgroup");
+					group.label = home.name;
+					for (const room of home.rooms) group.appendChild(new Option(room.name, `${home.id}:${room.id}`));
+					select.appendChild(group);
+				}
+				if (current && ![...select.options].some((o) => o.value === current)) {
+					select.add(new Option(`Room ${settings.room} (not found)`, current));
+				}
+				select.value = current;
+			}
+
+			function saveRoom() {
+				const [home, room] = $("room").value.split(":").map(Number);
+				saveSettings({ home: $("room").value ? home : null, room: $("room").value ? room : null, label: $("label").value });
+			}
+
+			function loadDial(s) {
+				$("step").value = String(s.step ?? 0.5);
+				$("until").value = s.until ?? "nextBlock";
+				$("press").value = s.press ?? "resume";
+				$("reverse").checked = s.reverse ?? false;
+			}
+
+			function saveDial() {
+				saveSettings({ step: Number($("step").value), until: $("until").value, press: $("press").value, reverse: $("reverse").checked });
+			}
+
+			function loadSettings(s) {
+				settings = s ?? {};
+				if (isDial) loadDial(settings);
+				else {
+					$("label").value = settings.label ?? "";
+					renderRooms();
+				}
+			}
+
+			function connectElgatoStreamDeckSocket(inPort, inUUID, inRegisterEvent, inInfo, inActionInfo) {
+				pluginUUID = inUUID;
+				actionInfo = JSON.parse(inActionInfo);
+				isDial = actionInfo.action.endsWith(".dial");
+				for (const el of document.querySelectorAll(".dial")) el.hidden = !isDial;
+				for (const el of document.querySelectorAll(".key")) el.hidden = isDial;
+				loadSettings(actionInfo.payload.settings);
+				renderStatus();
+				websocket = new WebSocket("ws://127.0.0.1:" + inPort);
+				websocket.onopen = () => {
+					websocket.send(JSON.stringify({ event: inRegisterEvent, uuid: inUUID }));
+					toPlugin({ cmd: "status" });
+				};
+				websocket.onmessage = (msg) => {
+					const data = JSON.parse(msg.data);
+					if (data.event === "didReceiveSettings") loadSettings(data.payload.settings);
+					if (data.event === "sendToPropertyInspector" && data.payload?.status) {
+						status = data.payload.status;
+						renderStatus();
+					}
+				};
+			}
+			const connectOpenActionSocket = connectElgatoStreamDeckSocket;
+		</script>
+	</head>
+	<body>
+		<div class="key">
+			<h3>Room</h3>
+			<div class="row"><label for="room">Room</label><select id="room" onchange="saveRoom()"></select></div>
+			<div class="row"><label for="label">Name on key</label><input id="label" type="text" placeholder="Room name" onchange="saveRoom()" /></div>
+			<p class="hint">Press the key to select this room. A Temperature dial on the same device then changes its temperature.</p>
+		</div>
+
+		<div class="dial">
+			<h3>Dial</h3>
+			<div class="row">
+				<label for="step">Each click</label>
+				<select id="step" onchange="saveDial()">
+					<option value="0.1">0.1 °C</option>
+					<option value="0.5">0.5 °C</option>
+					<option value="1">1 °C</option>
+				</select>
+			</div>
+			<div class="row">
+				<label for="until">Change lasts</label>
+				<select id="until" onchange="saveDial()">
+					<option value="nextBlock">Until the next schedule change</option>
+					<option value="manual">Until I change it back</option>
+					<option value="1h">For 1 hour</option>
+					<option value="3h">For 3 hours</option>
+				</select>
+			</div>
+			<div class="row">
+				<label for="press">Pressing the dial</label>
+				<select id="press" onchange="saveDial()">
+					<option value="resume">Goes back to the schedule</option>
+					<option value="off">Turns heating off (again: schedule)</option>
+					<option value="none">Does nothing</option>
+				</select>
+			</div>
+			<label class="check"><input id="reverse" type="checkbox" onchange="saveDial()" /> Reverse turning direction</label>
+			<p class="hint">The dial controls the room selected on this device. Without a selection it uses the first Room key. Turning below 5 °C turns the heating off.</p>
+		</div>
+
+		<h3>tado° account</h3>
+		<div id="signedOut">
+			<div class="buttons"><button class="primary" onclick="toPlugin({ cmd: 'login' })">Sign in with tado°</button></div>
+			<p class="hint">You confirm the sign-in on tado°'s own website. Your password never passes through OpenDeck.</p>
+		</div>
+		<div id="loggingIn" hidden>
+			<div>Open this page and confirm the code:</div>
+			<div class="code" id="userCode"></div>
+			<div><a id="loginLink" href="#" onclick="openLink(event)"></a></div>
+			<p class="hint">Or scan it with your phone:</p>
+			<div class="qr" id="qr"></div>
+			<div class="buttons"><button onclick="toPlugin({ cmd: 'cancelLogin' })">Cancel</button></div>
+		</div>
+		<div id="signedIn" hidden>
+			<div>Signed in<span id="quota"></span></div>
+			<div class="buttons">
+				<button onclick="toPlugin({ cmd: 'reloadRooms' })">Reload rooms</button>
+				<button onclick="toPlugin({ cmd: 'logout' })">Sign out</button>
+			</div>
+			<div class="row">
+				<label for="interval">Refresh every</label>
+				<select id="interval" onchange="toPlugin({ cmd: 'setInterval', minutes: Number(this.value) })">
+					<option value="5">5 minutes</option>
+					<option value="10">10 minutes</option>
+					<option value="15">15 minutes</option>
+					<option value="30">30 minutes</option>
+					<option value="60">1 hour</option>
+					<option value="0">Only when I press a selected room</option>
+				</select>
+			</div>
+			<p class="hint">Without an Auto-Assist subscription tado° allows 100 requests a day. One refresh is one request per home, and each temperature change is one more. 30 minutes leaves room for about 50 changes a day.</p>
+		</div>
+		<div class="error" id="error" hidden></div>
+	</body>
+</html>

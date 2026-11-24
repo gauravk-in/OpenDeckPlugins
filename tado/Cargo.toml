@@ -1,0 +1,26 @@
+[package]
+name = "opendeck-tado"
+version = "0.1.0"
+edition = "2024"
+license = "MIT"
+description = "OpenDeck plugin: show tado° rooms on keys and set their temperature with a dial"
+
+[dependencies]
+openaction = "2.8"
+tokio = { version = "1", features = ["rt-multi-thread", "macros", "sync", "time", "process"] }
+reqwest = { version = "0.12", default-features = false, features = ["rustls-tls", "json"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+image = { version = "0.25", default-features = false, features = ["png"] }
+ab_glyph = "0.2"
+base64 = "0.22"
+qrcode = { version = "0.14", default-features = false, features = ["svg"] }
+dirs = "6"
+log = "0.4"
+simplelog = "0.12"
+
+[profile.release]
+opt-level = 3
+lto = true
+codegen-units = 1
+strip = true
