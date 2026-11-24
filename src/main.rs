@@ -9,7 +9,7 @@ async fn main() -> OpenActionResult<()> {
 	// Debug helper: `opendeck-weblink --probe <url> [out.png]` prints where the logo comes from.
 	let args: Vec<String> = std::env::args().collect();
 	if args.get(1).map(String::as_str) == Some("--probe") {
-		probe(args.get(2).cloned().unwrap_or_default(), args.get(3).cloned()).await;
+		probe(args.get(2).cloned().unwrap_or_default(), args.get(3).cloned(), args.get(4).cloned()).await;
 		return Ok(());
 	}
 
@@ -24,7 +24,7 @@ async fn main() -> OpenActionResult<()> {
 	run(args).await
 }
 
-async fn probe(site: String, out: Option<String>) {
+async fn probe(site: String, out: Option<String>, caption: Option<String>) {
 	let _ = simplelog::TermLogger::init(
 		simplelog::LevelFilter::Debug,
 		simplelog::ConfigBuilder::new().add_filter_allow_str("opendeck_weblink").build(),
@@ -32,7 +32,7 @@ async fn probe(site: String, out: Option<String>) {
 		simplelog::ColorChoice::Never,
 	);
 	let Some(url) = logo::normalise_url(&site) else {
-		eprintln!("usage: opendeck-weblink --probe <url> [out.png]");
+		eprintln!("usage: opendeck-weblink --probe <url> [out.png] [caption]");
 		std::process::exit(2);
 	};
 	let client = logo::client();
@@ -46,6 +46,7 @@ async fn probe(site: String, out: Option<String>) {
 			render::letter_tile(url.host_str().unwrap_or("?"), "")
 		}
 	};
+	let img = render::add_caption(&img, caption.as_deref().unwrap_or(""), "auto");
 	if let Some(out) = out {
 		std::fs::write(out, render::to_png(&img)).expect("write png");
 	}

@@ -26,6 +26,8 @@ fn default_padding() -> u32 {
 pub struct Settings {
 	/// Website to open.
 	pub url: String,
+	/// Text drawn under a smaller logo (e.g. to tell two links to the same site apart).
+	pub caption: String,
 	/// Optional image URL that overrides the discovered logo.
 	pub logo_url: String,
 	/// "auto", "black", "white" or "#rrggbb".
@@ -46,6 +48,7 @@ impl Default for Settings {
 	fn default() -> Self {
 		Self {
 			url: String::new(),
+			caption: String::new(),
 			logo_url: String::new(),
 			background: default_background(),
 			padding: default_padding(),
@@ -179,12 +182,17 @@ fn refresh(instance_id: InstanceId, settings: Settings, force: bool) {
 			return;
 		}
 		let (img, status) = match found {
-			Some(img) => (render::compose(&img, &settings.background, settings.padding as f32 / 100.0), format!("Logo from {source}")),
+			Some(img) => {
+				// With a caption the whole tile is shrunk, so use less inner padding to keep the logo readable.
+				let padding = settings.padding as f32 / 100.0 * if settings.caption.trim().is_empty() { 1.0 } else { 0.5 };
+				(render::compose(&img, &settings.background, padding), format!("Logo from {source}"))
+			}
 			None => {
 				let bg = if settings.background.starts_with('#') { settings.background.as_str() } else { "" };
 				(render::letter_tile(&site_label(&settings), bg), format!("{source}, using a letter tile"))
 			}
 		};
+		let img = render::add_caption(&img, &settings.caption, &settings.background);
 		let data = render::data_url(&render::to_png(&img));
 		if let Err(e) = instance.set_image(Some(data.clone()), None).await {
 			warn!("set_image failed: {e}");

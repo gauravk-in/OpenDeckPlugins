@@ -2,7 +2,7 @@
 	"Name": "Web Link",
 	"Description": "Open a website with one press. The key shows the site's own logo, fetched automatically.",
 	"Author": "gauravk-in",
-	"Version": "0.1.0.0",
+	"Version": "0.2.0.0",
 	"SDKVersion": 2,
 	"UUID": "io.github.gauravk-in.weblink",
 	"URL": "https://github.com/gauravk-in/opendeck-weblink",

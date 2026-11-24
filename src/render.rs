@@ -96,6 +96,130 @@ pub fn compose(logo: &DynamicImage, background: &str, padding: f32) -> RgbaImage
 	canvas
 }
 
+fn text_width(font: &FontRef, px: f32, text: &str) -> f32 {
+	let scaled = font.as_scaled(PxScale::from(px));
+	let mut w = 0.0;
+	let mut prev = None;
+	for c in text.chars() {
+		let id = font.glyph_id(c);
+		if let Some(p) = prev {
+			w += scaled.kern(p, id);
+		}
+		w += scaled.h_advance(id);
+		prev = Some(id);
+	}
+	w
+}
+
+/// Draws one line of text horizontally centred on the canvas, with its baseline at `baseline`.
+fn draw_text(canvas: &mut RgbaImage, font: &FontRef, px: f32, text: &str, baseline: f32, fg: Rgba<u8>) {
+	let scale = PxScale::from(px);
+	let scaled = font.as_scaled(scale);
+	let mut x = (canvas.width() as f32 - text_width(font, px, text)) / 2.0;
+	let mut prev = None;
+	for c in text.chars() {
+		let id = font.glyph_id(c);
+		if let Some(p) = prev {
+			x += scaled.kern(p, id);
+		}
+		let glyph = id.with_scale_and_position(scale, point(x, baseline));
+		x += scaled.h_advance(id);
+		prev = Some(id);
+		let Some(outlined) = font.outline_glyph(glyph) else { continue };
+		let b = outlined.px_bounds();
+		outlined.draw(|gx, gy, cov| {
+			let (px, py) = (b.min.x as i32 + gx as i32, b.min.y as i32 + gy as i32);
+			if px >= 0 && py >= 0 && (px as u32) < canvas.width() && (py as u32) < canvas.height() {
+				let dst = canvas.get_pixel_mut(px as u32, py as u32);
+				for i in 0..3 {
+					dst[i] = (fg[i] as f32 * cov + dst[i] as f32 * (1.0 - cov)).round() as u8;
+				}
+			}
+		});
+	}
+}
+
+/// Splits a caption into lines that fit, choosing the largest font size that works.
+/// Returns (font size, lines).
+fn layout_caption(font: &FontRef, caption: &str, max_width: f32) -> (f32, Vec<String>) {
+	for px in [26.0, 24.0, 22.0, 20.0, 18.0, 17.0, 16.0] {
+		if text_width(font, px, caption) <= max_width {
+			return (px, vec![caption.to_owned()]);
+		}
+	}
+	// Two lines: break at the space that balances the lines best.
+	let words: Vec<&str> = caption.split_whitespace().collect();
+	if words.len() > 1 {
+		for px in [20.0, 18.0, 17.0, 16.0, 15.0, 14.0] {
+			let best = (1..words.len())
+				.map(|i| (words[..i].join(" "), words[i..].join(" ")))
+				.filter(|(a, b)| text_width(font, px, a) <= max_width && text_width(font, px, b) <= max_width)
+				.min_by_key(|(a, b)| (text_width(font, px, a) - text_width(font, px, b)).abs() as i32);
+			if let Some((a, b)) = best {
+				return (px, vec![a, b]);
+			}
+		}
+	}
+	// Still too long: shorten with an ellipsis.
+	let px = 16.0;
+	let mut s: String = caption.to_owned();
+	while !s.is_empty() && text_width(font, px, &format!("{s}…")) > max_width {
+		s.pop();
+	}
+	(px, vec![format!("{}…", s.trim_end())])
+}
+
+/// Average colour of the outermost pixels, used to extend a tile's background behind the caption.
+fn edge_colour(img: &RgbaImage) -> Rgba<u8> {
+	let (w, h) = img.dimensions();
+	let (mut r, mut g, mut b, mut n) = (0u64, 0u64, 0u64, 0u64);
+	for (x, y, p) in img.enumerate_pixels() {
+		if x == 0 || y == 0 || x == w - 1 || y == h - 1 {
+			r += p[0] as u64;
+			g += p[1] as u64;
+			b += p[2] as u64;
+			n += 1;
+		}
+	}
+	let n = n.max(1);
+	Rgba([(r / n) as u8, (g / n) as u8, (b / n) as u8, 255])
+}
+
+/// Shrinks a finished key image towards the top and writes `caption` underneath.
+/// `background` is the user's setting; an explicit colour wins, otherwise the tile's own edge colour is used.
+pub fn add_caption(key: &RgbaImage, caption: &str, background: &str) -> RgbaImage {
+	let caption = caption.trim();
+	if caption.is_empty() {
+		return key.clone();
+	}
+	let font = FontRef::try_from_slice(FONT).expect("embedded font");
+	let bg = match background.trim().to_ascii_lowercase().as_str() {
+		"white" => Rgba([255, 255, 255, 255]),
+		"black" => Rgba([0, 0, 0, 255]),
+		other => parse_colour(other).unwrap_or_else(|| edge_colour(key)),
+	};
+	let fg = if luminance(&bg) > 0.6 { Rgba([20, 20, 20, 255]) } else { Rgba([255, 255, 255, 255]) };
+
+	let margin = 6.0;
+	let (px, lines) = layout_caption(&font, caption, KEY_SIZE as f32 - 2.0 * margin);
+	let line_height = (px * 1.15).round();
+	let text_block = line_height * lines.len() as f32;
+	let logo_size = (KEY_SIZE as f32 - text_block - 3.0 * margin).clamp(56.0, 100.0) as u32;
+
+	let mut canvas = RgbaImage::from_pixel(KEY_SIZE, KEY_SIZE, bg);
+	let logo = imageops::resize(key, logo_size, logo_size, imageops::FilterType::Lanczos3);
+	let top = margin as u32;
+	imageops::overlay(&mut canvas, &logo, ((KEY_SIZE - logo_size) / 2) as i64, top as i64);
+
+	let scaled = font.as_scaled(PxScale::from(px));
+	let text_top = top as f32 + logo_size as f32 + (KEY_SIZE as f32 - top as f32 - logo_size as f32 - text_block) / 2.0;
+	for (i, line) in lines.iter().enumerate() {
+		let baseline = text_top + i as f32 * line_height + (line_height + scaled.ascent() + scaled.descent()) / 2.0;
+		draw_text(&mut canvas, &font, px, line, baseline, fg);
+	}
+	canvas
+}
+
 /// Fallback: a coloured tile with the first letter of the site name.
 pub fn letter_tile(label: &str, background: &str) -> RgbaImage {
 	let letter = label.chars().find(|c| c.is_alphanumeric()).unwrap_or('?').to_uppercase().next().unwrap_or('?');
@@ -183,6 +307,27 @@ mod tests {
 		}
 		let out = compose(&DynamicImage::ImageRgba8(img), "auto", 0.12);
 		assert_eq!(*out.get_pixel(1, 1), Rgba([255, 255, 255, 255]));
+	}
+
+	#[test]
+	fn caption_shrinks_logo_and_draws_text() {
+		let tile = RgbaImage::from_pixel(KEY_SIZE, KEY_SIZE, Rgba([30, 90, 200, 255]));
+		let out = add_caption(&tile, "Pull requests", "auto");
+		assert_eq!(out.dimensions(), (KEY_SIZE, KEY_SIZE));
+		// Background extends the tile colour, and white text appears in the lower part.
+		assert_eq!(*out.get_pixel(1, KEY_SIZE - 2), Rgba([30, 90, 200, 255]));
+		let white = (110..KEY_SIZE).flat_map(|y| (0..KEY_SIZE).map(move |x| (x, y))).filter(|&(x, y)| out.get_pixel(x, y)[0] > 200).count();
+		assert!(white > 100, "caption text expected ({white})");
+		assert_eq!(add_caption(&tile, "  ", "auto"), tile);
+	}
+
+	#[test]
+	fn long_captions_wrap_or_truncate() {
+		let font = FontRef::try_from_slice(FONT).unwrap();
+		let (_, lines) = layout_caption(&font, "Home Assistant energy dashboard", 132.0);
+		assert_eq!(lines.len(), 2);
+		let (_, lines) = layout_caption(&font, "Supercalifragilisticexpialidocious", 132.0);
+		assert!(lines[0].ends_with('…'));
 	}
 
 	#[test]

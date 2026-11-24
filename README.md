@@ -14,6 +14,7 @@ The built-in *Open URL* action in OpenDeck's starter pack opens links but leaves
   4. `/apple-touch-icon.png` and `/favicon.ico`
   5. Google's favicon service (can be turned off)
   6. If all else fails, a coloured tile with the site's first letter
+- Optional **Caption**: the logo shrinks and the text goes underneath (handy for two links to the same site). Long captions wrap to two lines or get shortened.
 - Square, opaque icons fill the whole key. Transparent logos are trimmed, padded and put on a background: **Automatic** picks white behind dark logos and black otherwise, or choose black, white or any colour.
 - Logos are cached on disk (`~/Library/Caches/opendeck-weblink` on macOS, `~/.cache/opendeck-weblink` on Linux) for 30 days. **Fetch logo again** in the settings refreshes one.
 - Self-signed HTTPS certificates are accepted when fetching logos, so local dashboards (Home Assistant, routers, NAS) work.

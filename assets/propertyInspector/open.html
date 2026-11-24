@@ -40,6 +40,7 @@
 				const bgChoice = $("bgChoice").value;
 				return {
 					url: $("url").value.trim(),
+					caption: $("caption").value.trim(),
 					logoUrl: $("logoUrl").value.trim(),
 					background: bgChoice === "custom" ? $("bgColour").value : bgChoice,
 					padding: Number($("padding").value),
@@ -61,6 +62,7 @@
 
 			function load(s) {
 				$("url").value = s.url ?? "";
+				$("caption").value = s.caption ?? "";
 				$("logoUrl").value = s.logoUrl ?? "";
 				const bg = s.background ?? "auto";
 				if (bg.startsWith("#")) {
@@ -101,6 +103,12 @@
 			<div class="value"><input id="url" type="text" placeholder="github.com" onchange="save()" /></div>
 		</div>
 		<div class="hint">Press Enter or click away to fetch the logo. http:// for local devices.</div>
+
+		<div class="row">
+			<label for="caption">Caption</label>
+			<div class="value"><input id="caption" type="text" placeholder="Optional, e.g. Pull requests" onchange="save()" /></div>
+		</div>
+		<div class="hint">Shrinks the logo and writes this underneath. Leave OpenDeck's own Title empty.</div>
 
 		<div class="preview">
 			<img id="preview" src="" alt="" />
