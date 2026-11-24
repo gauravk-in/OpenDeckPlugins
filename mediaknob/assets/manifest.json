@@ -2,7 +2,7 @@
 	"Name": "Media Knob",
 	"Description": "Control media with a knob. Choose per knob what turning does (volume, seek or tracks) and what pressing does (play/pause or mute).",
 	"Author": "gauravk-in",
-	"Version": "0.1.0",
+	"Version": "0.1.1",
 	"SDKVersion": 2,
 	"UUID": "io.github.gauravk-in.mediaknob",
 	"URL": "https://github.com/gauravk-in/OpenDeckPlugins/tree/main/mediaknob",

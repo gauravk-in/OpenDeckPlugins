@@ -74,6 +74,47 @@ unsafe extern "C" {}
 unsafe extern "C" {
 	fn CGEventPost(tap: u32, event: *mut c_void);
 	fn AXIsProcessTrusted() -> bool;
+	fn AXIsProcessTrustedWithOptions(options: *const c_void) -> bool;
+	static kAXTrustedCheckOptionPrompt: *const c_void;
+}
+
+#[link(name = "CoreFoundation", kind = "framework")]
+unsafe extern "C" {
+	static kCFBooleanTrue: *const c_void;
+	static kCFTypeDictionaryKeyCallBacks: c_void;
+	static kCFTypeDictionaryValueCallBacks: c_void;
+	fn CFDictionaryCreate(
+		allocator: *const c_void,
+		keys: *const *const c_void,
+		values: *const *const c_void,
+		count: isize,
+		key_callbacks: *const c_void,
+		value_callbacks: *const c_void,
+	) -> *const c_void;
+	fn CFRelease(cf: *const c_void);
+}
+
+/// Asks macOS to show its "OpenDeck would like to control this computer" prompt, which also adds the running
+/// OpenDeck app to the Accessibility list. Without it, a differently built OpenDeck (another bundle id or
+/// signature) never shows up there, and the switch the user turned on belongs to the other build.
+fn ask_for_accessibility() -> bool {
+	unsafe {
+		let keys = [kAXTrustedCheckOptionPrompt];
+		let values = [kCFBooleanTrue];
+		let options = CFDictionaryCreate(
+			std::ptr::null(),
+			keys.as_ptr(),
+			values.as_ptr(),
+			1,
+			&raw const kCFTypeDictionaryKeyCallBacks,
+			&raw const kCFTypeDictionaryValueCallBacks,
+		);
+		let trusted = AXIsProcessTrustedWithOptions(options);
+		if !options.is_null() {
+			CFRelease(options);
+		}
+		trusted
+	}
 }
 
 #[link(name = "objc")]
@@ -122,8 +163,9 @@ static WARNED: AtomicBool = AtomicBool::new(false);
 
 /// Sends a media key if OpenDeck may send keys. Returns false when it may not.
 async fn media_key(key: i64) -> bool {
-	let trusted = unsafe { AXIsProcessTrusted() };
+	let mut trusted = unsafe { AXIsProcessTrusted() };
 	if !trusted && !WARNED.swap(true, Ordering::Relaxed) {
+		trusted = ask_for_accessibility();
 		log::warn!(
 			"OpenDeck is not allowed to send media keys. Allow it under System Settings > Privacy & Security > \
 			 Accessibility. Until then, Spotify and Music are controlled directly."
