@@ -1,13 +1,13 @@
 [package]
 name = "opendeck-weblink"
-version = "0.2.0"
+version = "0.3.0"
 edition = "2024"
 license = "MIT"
 description = "OpenDeck plugin: open a URL and show the website's logo on the key"
 
 [dependencies]
 openaction = "2.8"
-tokio = { version = "1", features = ["rt-multi-thread", "macros", "sync", "time", "fs"] }
+tokio = { version = "1", features = ["rt-multi-thread", "macros", "sync", "time", "fs", "process"] }
 reqwest = { version = "0.12", default-features = false, features = ["rustls-tls", "gzip", "brotli", "deflate", "json"] }
 scraper = "0.20"
 url = "2"

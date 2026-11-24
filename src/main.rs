@@ -1,4 +1,5 @@
 mod action;
+mod browser;
 mod logo;
 mod render;
 
@@ -8,6 +9,12 @@ use openaction::*;
 async fn main() -> OpenActionResult<()> {
 	// Debug helper: `opendeck-weblink --probe <url> [out.png]` prints where the logo comes from.
 	let args: Vec<String> = std::env::args().collect();
+	if args.get(1).map(String::as_str) == Some("--profiles") {
+		for p in browser::list_profiles() {
+			println!("{}\t{}", p.value, p.label);
+		}
+		return Ok(());
+	}
 	if args.get(1).map(String::as_str) == Some("--probe") {
 		probe(args.get(2).cloned().unwrap_or_default(), args.get(3).cloned(), args.get(4).cloned()).await;
 		return Ok(());

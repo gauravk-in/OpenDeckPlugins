@@ -28,6 +28,8 @@ pub struct Settings {
 	pub url: String,
 	/// Text drawn under a smaller logo (e.g. to tell two links to the same site apart).
 	pub caption: String,
+	/// "" for the default browser, or "<browser>:<profile dir>" such as "chrome:Profile 1".
+	pub open_with: String,
 	/// Optional image URL that overrides the discovered logo.
 	pub logo_url: String,
 	/// "auto", "black", "white" or "#rrggbb".
@@ -49,6 +51,7 @@ impl Default for Settings {
 		Self {
 			url: String::new(),
 			caption: String::new(),
+			open_with: String::new(),
 			logo_url: String::new(),
 			background: default_background(),
 			padding: default_padding(),
@@ -211,9 +214,12 @@ pub struct WebLinkAction;
 
 impl WebLinkAction {
 	async fn open(settings: &Settings) -> OpenActionResult<()> {
-		if let Some(url) = logo::normalise_url(&settings.url) {
-			open_url(url.to_string()).await?;
+		let Some(url) = logo::normalise_url(&settings.url) else { return Ok(()) };
+		let url = url.to_string();
+		if !settings.open_with.trim().is_empty() && crate::browser::open_in_profile(settings.open_with.trim(), &url).await {
+			return Ok(());
 		}
+		open_url(url).await?;
 		Ok(())
 	}
 }
@@ -244,6 +250,8 @@ impl Action for WebLinkAction {
 	}
 
 	async fn property_inspector_did_appear(&self, instance: &Instance, _settings: &Self::Settings) -> OpenActionResult<()> {
+		let profiles = tokio::task::spawn_blocking(crate::browser::list_profiles).await.unwrap_or_default();
+		instance.send_to_property_inspector(serde_json::json!({ "profiles": profiles })).await?;
 		if let Some(p) = PREVIEW.get(&instance.instance_id).map(|p| p.clone()) {
 			instance.send_to_property_inspector(p).await?;
 		}

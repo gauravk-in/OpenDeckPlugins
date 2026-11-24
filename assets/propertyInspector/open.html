@@ -41,6 +41,7 @@
 				return {
 					url: $("url").value.trim(),
 					caption: $("caption").value.trim(),
+					openWith: $("openWith").value,
 					logoUrl: $("logoUrl").value.trim(),
 					background: bgChoice === "custom" ? $("bgColour").value : bgChoice,
 					padding: Number($("padding").value),
@@ -60,9 +61,28 @@
 				websocket?.send(JSON.stringify({ event: "sendToPlugin", action: actionInfo.action, context: actionInfo.context, payload: { action: "refresh" } }));
 			}
 
+			let savedOpenWith = "";
+			function setOpenWith(value) {
+				savedOpenWith = value;
+				const sel = $("openWith");
+				if (value && ![...sel.options].some((o) => o.value === value)) {
+					// Profile not detected (yet): keep it selectable so saving doesn't lose it.
+					sel.add(new Option(value.replace(":", ": "), value));
+				}
+				sel.value = value;
+			}
+
+			function setProfiles(profiles) {
+				const sel = $("openWith");
+				sel.length = 1;
+				for (const p of profiles) sel.add(new Option(p.label, p.value));
+				setOpenWith(savedOpenWith);
+			}
+
 			function load(s) {
 				$("url").value = s.url ?? "";
 				$("caption").value = s.caption ?? "";
+				setOpenWith(s.openWith ?? "");
 				$("logoUrl").value = s.logoUrl ?? "";
 				const bg = s.background ?? "auto";
 				if (bg.startsWith("#")) {
@@ -87,6 +107,7 @@
 					const data = JSON.parse(msg.data);
 					if (data.event === "sendToPropertyInspector") {
 						const p = data.payload ?? {};
+						if (p.profiles) setProfiles(p.profiles);
 						if (p.status) $("status").textContent = p.status;
 						if (p.preview) $("preview").src = p.preview;
 					} else if (data.event === "didReceiveSettings") {
@@ -109,6 +130,15 @@
 			<div class="value"><input id="caption" type="text" placeholder="Optional, e.g. Pull requests" onchange="save()" /></div>
 		</div>
 		<div class="hint">Shrinks the logo and writes this underneath. Leave OpenDeck's own Title empty.</div>
+
+		<div class="row">
+			<label for="openWith">Open with</label>
+			<div class="value">
+				<select id="openWith" onchange="save()">
+					<option value="">Default browser</option>
+				</select>
+			</div>
+		</div>
 
 		<div class="preview">
 			<img id="preview" src="" alt="" />
