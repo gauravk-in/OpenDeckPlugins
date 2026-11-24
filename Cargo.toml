@@ -1,6 +1,6 @@
 [package]
 name = "opendeck-weblink"
-version = "0.3.0"
+version = "0.4.0"
 edition = "2024"
 license = "MIT"
 description = "OpenDeck plugin: open a URL and show the website's logo on the key"

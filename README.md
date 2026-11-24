@@ -16,6 +16,7 @@ The built-in *Open URL* action in OpenDeck's starter pack opens links but leaves
   6. If all else fails, a coloured tile with the site's first letter
 - Optional **Caption**: the logo shrinks and the text goes underneath (handy for two links to the same site). Long captions wrap to two lines or get shortened.
 - **Open with** a specific Chrome, Brave, Edge or Chromium profile (e.g. work vs personal). Profiles are read from the browser's `Local State` file; `opendeck-weblink --profiles` lists what it finds.
+- **Switch to the tab if it's already open** (macOS): finds a Safari/Chrome/Brave/Edge tab showing that address (or a page under it) and brings it to the front instead of opening a new one. Uses AppleScript, so macOS asks once to let OpenDeck control the browser. Chrome's scripting can't tell profiles apart, so the first matching tab in any profile wins.
 - Square, opaque icons fill the whole key. Transparent logos are trimmed, padded and put on a background: **Automatic** picks white behind dark logos and black otherwise, or choose black, white or any colour.
 - Logos are cached on disk (`~/Library/Caches/opendeck-weblink` on macOS, `~/.cache/opendeck-weblink` on Linux) for 30 days. **Fetch logo again** in the settings refreshes one.
 - Self-signed HTTPS certificates are accepted when fetching logos, so local dashboards (Home Assistant, routers, NAS) work.

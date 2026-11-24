@@ -42,6 +42,7 @@
 					url: $("url").value.trim(),
 					caption: $("caption").value.trim(),
 					openWith: $("openWith").value,
+					reuseTab: $("reuseTab").checked,
 					logoUrl: $("logoUrl").value.trim(),
 					background: bgChoice === "custom" ? $("bgColour").value : bgChoice,
 					padding: Number($("padding").value),
@@ -83,6 +84,7 @@
 				$("url").value = s.url ?? "";
 				$("caption").value = s.caption ?? "";
 				setOpenWith(s.openWith ?? "");
+				$("reuseTab").checked = s.reuseTab ?? false;
 				$("logoUrl").value = s.logoUrl ?? "";
 				const bg = s.background ?? "auto";
 				if (bg.startsWith("#")) {
@@ -138,6 +140,11 @@
 					<option value="">Default browser</option>
 				</select>
 			</div>
+		</div>
+
+		<div class="row">
+			<label></label>
+			<div class="value"><label><input id="reuseTab" type="checkbox" onchange="save()" /> Switch to the tab if it's already open (macOS)</label></div>
 		</div>
 
 		<div class="preview">

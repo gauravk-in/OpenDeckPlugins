@@ -133,3 +133,155 @@ pub async fn open_in_profile(choice: &str, url: &str) -> bool {
 		}
 	}
 }
+
+/// Reduces a URL to what matters for "is this the same page": no scheme, no "www.",
+/// no fragment, no trailing slash. "https://www.github.com/foo/#x" -> "github.com/foo".
+pub fn match_key(url: &str) -> String {
+	let s = url.trim();
+	let s = s.split_once("://").map_or(s, |(_, rest)| rest);
+	let s = s.strip_prefix("www.").unwrap_or(s);
+	let s = s.split('#').next().unwrap_or(s);
+	s.trim_end_matches('/').to_ascii_lowercase()
+}
+
+/// True when an open tab shows the key's page or something below it.
+/// "github.com/foo" matches "github.com/foo", "github.com/foo/pulls" and "github.com/foo?tab=x",
+/// but not "github.com/foobar".
+pub fn tab_matches(tab_url: &str, key_url: &str) -> bool {
+	let (tab, key) = (match_key(tab_url), match_key(key_url));
+	if key.is_empty() {
+		return false;
+	}
+	tab == key || (tab.starts_with(&key) && matches!(tab.as_bytes()[key.len()], b'/' | b'?'))
+}
+
+async fn osascript(script: &str, args: &[&str]) -> Option<String> {
+	let out = tokio::process::Command::new("/usr/bin/osascript")
+		.arg("-e")
+		.arg(script)
+		.args(args)
+		.stdin(std::process::Stdio::null())
+		.output()
+		.await
+		.ok()?;
+	if !out.status.success() {
+		warn!("osascript failed: {}", String::from_utf8_lossy(&out.stderr).trim());
+		return None;
+	}
+	Some(String::from_utf8_lossy(&out.stdout).into_owned())
+}
+
+/// Lists "window<TAB>tab<TAB>url" lines for every open tab, without launching the app.
+const CHROME_LIST: &str = r#"on run argv
+	set appName to item 1 of argv
+	if application appName is not running then return ""
+	set out to ""
+	set TB to character id 9
+	using terms from application "Google Chrome"
+		tell application appName
+			set wi to 0
+			repeat with w in windows
+				set wi to wi + 1
+				set ti to 0
+				try
+					repeat with u in (URL of tabs of w)
+						set ti to ti + 1
+						set out to out & (wi as text) & TB & (ti as text) & TB & ((contents of u) as text) & linefeed
+					end repeat
+				end try
+			end repeat
+		end tell
+	end using terms from
+	return out
+end run"#;
+
+const CHROME_FOCUS: &str = r#"on run argv
+	set appName to item 1 of argv
+	set wi to (item 2 of argv) as integer
+	set ti to (item 3 of argv) as integer
+	using terms from application "Google Chrome"
+		tell application appName
+			set w to window wi
+			set active tab index of w to ti
+			set index of w to 1
+			activate
+		end tell
+	end using terms from
+end run"#;
+
+const SAFARI_LIST: &str = r#"on run argv
+	if application "Safari" is not running then return ""
+	set out to ""
+	set TB to character id 9
+	tell application "Safari"
+		set wi to 0
+		repeat with w in windows
+			set wi to wi + 1
+			set ti to 0
+			try
+				repeat with u in (URL of tabs of w)
+					set ti to ti + 1
+					set out to out & (wi as text) & TB & (ti as text) & TB & ((contents of u) as text) & linefeed
+				end repeat
+			end try
+		end repeat
+	end tell
+	return out
+end run"#;
+
+const SAFARI_FOCUS: &str = r#"on run argv
+	set wi to (item 2 of argv) as integer
+	set ti to (item 3 of argv) as integer
+	tell application "Safari"
+		set w to window wi
+		set current tab of w to tab ti of w
+		set index of w to 1
+		activate
+	end tell
+end run"#;
+
+/// macOS only: if a tab showing `url` is already open, bring it to the front and return true.
+/// `choice` is the "Open with" setting; with the default browser we look in Safari and Chrome
+/// (only if they are already running). Chrome's scripting can't tell profiles apart, so with
+/// several profiles the first matching tab in any profile wins.
+pub async fn focus_existing_tab(choice: &str, url: &str) -> bool {
+	if !cfg!(target_os = "macos") {
+		return false;
+	}
+	let apps: Vec<(&str, bool)> = match choice.split_once(':').and_then(|(id, _)| BROWSERS.iter().find(|b| b.id == id)) {
+		Some(b) => vec![(b.mac_app, false)],
+		None => vec![("Safari", true), ("Google Chrome", false)],
+	};
+	for (app, safari) in apps {
+		let list = if safari { osascript(SAFARI_LIST, &[app]).await } else { osascript(CHROME_LIST, &[app]).await };
+		let Some(list) = list else { continue };
+		let hit = list.lines().find_map(|line| {
+			let mut parts = line.splitn(3, '\t');
+			let (w, t, u) = (parts.next()?, parts.next()?, parts.next()?);
+			tab_matches(u, url).then(|| (w.to_owned(), t.to_owned()))
+		});
+		if let Some((w, t)) = hit {
+			let script = if safari { SAFARI_FOCUS } else { CHROME_FOCUS };
+			if osascript(script, &[app, &w, &t]).await.is_some() {
+				info!("focused existing {app} tab for {url}");
+				return true;
+			}
+		}
+	}
+	false
+}
+
+#[cfg(test)]
+mod tests {
+	use super::*;
+
+	#[test]
+	fn matching() {
+		assert!(tab_matches("https://www.github.com/", "github.com"));
+		assert!(tab_matches("https://github.com/foo/pulls", "https://github.com/foo"));
+		assert!(tab_matches("https://github.com/foo?tab=x#y", "https://github.com/foo/"));
+		assert!(!tab_matches("https://github.com/foobar", "https://github.com/foo"));
+		assert!(!tab_matches("https://gitlab.com/", "github.com"));
+		assert!(tab_matches("http://homeassistant.local:8123/lovelace/0", "https://homeassistant.local:8123"));
+	}
+}

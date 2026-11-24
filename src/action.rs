@@ -30,6 +30,8 @@ pub struct Settings {
 	pub caption: String,
 	/// "" for the default browser, or "<browser>:<profile dir>" such as "chrome:Profile 1".
 	pub open_with: String,
+	/// macOS: bring an already-open tab of this site to the front instead of opening a new one.
+	pub reuse_tab: bool,
 	/// Optional image URL that overrides the discovered logo.
 	pub logo_url: String,
 	/// "auto", "black", "white" or "#rrggbb".
@@ -52,6 +54,7 @@ impl Default for Settings {
 			url: String::new(),
 			caption: String::new(),
 			open_with: String::new(),
+			reuse_tab: false,
 			logo_url: String::new(),
 			background: default_background(),
 			padding: default_padding(),
@@ -216,6 +219,9 @@ impl WebLinkAction {
 	async fn open(settings: &Settings) -> OpenActionResult<()> {
 		let Some(url) = logo::normalise_url(&settings.url) else { return Ok(()) };
 		let url = url.to_string();
+		if settings.reuse_tab && crate::browser::focus_existing_tab(settings.open_with.trim(), &url).await {
+			return Ok(());
+		}
 		if !settings.open_with.trim().is_empty() && crate::browser::open_in_profile(settings.open_with.trim(), &url).await {
 			return Ok(());
 		}
