@@ -1,0 +1,48 @@
+name: Media Knob
+
+on:
+  push:
+    branches: [main]
+    paths: ["mediaknob/**", ".github/workflows/mediaknob.yml"]
+    tags: ["mediaknob-v*"]
+  pull_request:
+    paths: ["mediaknob/**", ".github/workflows/mediaknob.yml"]
+  workflow_dispatch:
+
+defaults:
+  run:
+    working-directory: mediaknob
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: aarch64-unknown-linux-gnu,x86_64-unknown-linux-gnu,x86_64-apple-darwin,aarch64-apple-darwin
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: mediaknob
+      - name: Install zig and cargo-zigbuild
+        run: |
+          pip install ziglang
+          cargo install --locked cargo-zigbuild
+      # The mac binary links AppKit (for media keys), so cross-linking it needs a macOS SDK.
+      - name: Fetch macOS SDK
+        run: |
+          curl -sSL https://github.com/joseluisq/macosx-sdks/releases/download/13.3/MacOSX13.3.sdk.tar.xz | tar xJ -C "$RUNNER_TEMP"
+          echo "SDKROOT=$RUNNER_TEMP/MacOSX13.3.sdk" >> "$GITHUB_ENV"
+      - name: Test
+        run: cargo test --release
+      - name: Package
+        run: scripts/package.sh
+      - uses: actions/upload-artifact@v4
+        with:
+          name: opendeck-mediaknob-plugin
+          path: mediaknob/dist/*.zip
+      - name: Release
+        if: startsWith(github.ref, 'refs/tags/mediaknob-v')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: mediaknob/dist/*.zip

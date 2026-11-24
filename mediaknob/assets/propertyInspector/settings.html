@@ -1,0 +1,141 @@
+<!doctype html>
+<html lang="en">
+	<head>
+		<meta charset="utf-8" />
+		<style>
+			/* OpenDeck always shows the inspector on a dark background. */
+			:root { color-scheme: dark; --fg: #d4d4d4; --muted: #a3a3a3; --field: #404040; --border: #525252; }
+			body { margin: 0; padding: 8px 10px; font: 13px/1.4 system-ui, -apple-system, "Segoe UI", sans-serif; color: var(--fg); background: transparent; }
+			label.check { display: flex; align-items: center; gap: 8px; margin: 6px 0; }
+			.row { display: flex; align-items: center; gap: 8px; margin: 6px 0; }
+			.row > label { flex: 0 0 120px; color: var(--muted); }
+			select, input[type="number"] { flex: 1; min-width: 0; padding: 4px 6px; border-radius: 4px; border: 1px solid var(--border); background: var(--field); color: var(--fg); font: inherit; }
+			.unit { color: var(--muted); }
+			.hint { color: var(--muted); font-size: 11px; margin: 10px 0 0; }
+			[hidden] { display: none !important; }
+		</style>
+		<script>
+			let websocket = null;
+			let actionInfo = null;
+			const $ = (id) => document.getElementById(id);
+			const isMac = /Mac/.test(navigator.platform || navigator.userAgent);
+			const defaults = { rotate: "volume", press: "mute", pressRotate: "none", volumeStep: 5, seekStep: 10, reverse: false, player: "auto", showLevel: true };
+
+			function load(s) {
+				s = { ...defaults, ...s };
+				$("rotate").value = s.rotate;
+				$("press").value = s.press;
+				$("pressRotate").value = s.pressRotate;
+				$("volumeStep").value = s.volumeStep;
+				$("seekStep").value = s.seekStep;
+				$("reverse").checked = s.reverse;
+				$("player").value = s.player;
+				$("showLevel").checked = s.showLevel;
+				update();
+			}
+
+			function uses(kind) {
+				return $("rotate").value === kind || $("pressRotate").value === kind;
+			}
+
+			// Show only the fields that matter for what the knob is set to do.
+			function update() {
+				const controller = actionInfo?.payload?.controller ?? actionInfo?.controller;
+				const isDial = controller !== "Keypad";
+				for (const el of document.querySelectorAll(".dial")) el.hidden = !isDial;
+				$("volumeRow").hidden = !isDial || !uses("volume");
+				$("seekRow").hidden = !isDial || !uses("seek");
+				const press = $("press").value;
+				const needsPlayer = uses("seek") || uses("track") || ["playPause", "next", "previous"].includes(press);
+				$("playerRow").hidden = !needsPlayer;
+				$("showLevelRow").hidden = !(uses("volume") || press === "mute");
+				$("macSeek").hidden = !(isMac && uses("seek"));
+				$("macKeys").hidden = !(isMac && needsPlayer && $("player").value === "auto");
+				$("music").hidden = !isMac;
+			}
+
+			function save() {
+				update();
+				const step = (id, min, max, fallback) => Math.min(max, Math.max(min, parseInt($(id).value, 10) || fallback));
+				websocket?.send(
+					JSON.stringify({
+						event: "setSettings",
+						context: actionInfo.context,
+						payload: {
+							rotate: $("rotate").value,
+							press: $("press").value,
+							pressRotate: $("pressRotate").value,
+							volumeStep: step("volumeStep", 1, 25, 5),
+							seekStep: step("seekStep", 1, 120, 10),
+							reverse: $("reverse").checked,
+							player: $("player").value,
+							showLevel: $("showLevel").checked,
+						},
+					}),
+				);
+			}
+
+			function connectElgatoStreamDeckSocket(inPort, inUUID, inRegisterEvent, inInfo, inActionInfo) {
+				actionInfo = JSON.parse(inActionInfo);
+				load(actionInfo.payload.settings ?? {});
+				websocket = new WebSocket("ws://127.0.0.1:" + inPort);
+				websocket.onopen = () => websocket.send(JSON.stringify({ event: inRegisterEvent, uuid: inUUID }));
+				websocket.onmessage = (msg) => {
+					const data = JSON.parse(msg.data);
+					if (data.event === "didReceiveSettings") load(data.payload.settings ?? {});
+				};
+			}
+			const connectOpenActionSocket = connectElgatoStreamDeckSocket;
+		</script>
+	</head>
+	<body>
+		<div class="row dial">
+			<label for="rotate">Turning</label>
+			<select id="rotate" onchange="save()">
+				<option value="volume">Changes the volume</option>
+				<option value="seek">Seeks in the track</option>
+				<option value="track">Goes to the next / previous track</option>
+				<option value="none">Does nothing</option>
+			</select>
+		</div>
+		<div class="row">
+			<label for="press">Pressing</label>
+			<select id="press" onchange="save()">
+				<option value="playPause">Plays / pauses</option>
+				<option value="mute">Mutes / unmutes</option>
+				<option value="next">Goes to the next track</option>
+				<option value="previous">Goes to the previous track</option>
+				<option value="none">Does nothing</option>
+			</select>
+		</div>
+		<div class="row dial">
+			<label for="pressRotate">Turning while held</label>
+			<select id="pressRotate" onchange="save()">
+				<option value="none">Same as turning</option>
+				<option value="volume">Changes the volume</option>
+				<option value="seek">Seeks in the track</option>
+				<option value="track">Goes to the next / previous track</option>
+			</select>
+		</div>
+		<div class="row" id="volumeRow">
+			<label for="volumeStep">Volume step</label>
+			<input id="volumeStep" type="number" min="1" max="25" onchange="save()" /><span class="unit">%</span>
+		</div>
+		<div class="row" id="seekRow">
+			<label for="seekStep">Seek step</label>
+			<input id="seekStep" type="number" min="1" max="120" onchange="save()" /><span class="unit">seconds</span>
+		</div>
+		<label class="check dial"><input id="reverse" type="checkbox" onchange="save()" /> Reverse turning direction</label>
+		<div class="row" id="playerRow">
+			<label for="player">Player</label>
+			<select id="player" onchange="save()">
+				<option value="auto">Whatever is playing</option>
+				<option value="spotify">Spotify</option>
+				<option value="music" id="music">Music</option>
+			</select>
+		</div>
+		<label class="check" id="showLevelRow"><input id="showLevel" type="checkbox" onchange="save()" /> Show the volume as the title</label>
+		<p class="hint" id="macKeys">Play/pause and track changes are sent as media keys, so they reach whatever app is playing. Allow OpenDeck under System Settings &gt; Privacy &amp; Security &gt; Accessibility. Until then, Spotify and Music are controlled directly.</p>
+		<p class="hint" id="macSeek">macOS has no system-wide seek, so seeking works with Spotify and Music.</p>
+	</body>
+</html>

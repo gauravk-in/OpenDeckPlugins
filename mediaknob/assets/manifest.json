@@ -1,0 +1,41 @@
+{
+	"Name": "Media Knob",
+	"Description": "Control media with a knob. Choose per knob what turning does (volume, seek or tracks) and what pressing does (play/pause or mute).",
+	"Author": "gauravk-in",
+	"Version": "0.1.0",
+	"SDKVersion": 2,
+	"UUID": "io.github.gauravk-in.mediaknob",
+	"URL": "https://github.com/gauravk-in/OpenDeckPlugins/tree/main/mediaknob",
+	"Icon": "icons/plugin",
+	"Category": "Media Knob",
+	"CategoryIcon": "icons/category",
+	"CodePaths": {
+		"x86_64-apple-darwin": "bin/opendeck-mediaknob-mac",
+		"aarch64-apple-darwin": "bin/opendeck-mediaknob-mac",
+		"x86_64-unknown-linux-gnu": "bin/opendeck-mediaknob-linux-x86_64",
+		"aarch64-unknown-linux-gnu": "bin/opendeck-mediaknob-linux-aarch64"
+	},
+	"CodePathMac": "bin/opendeck-mediaknob-mac",
+	"CodePathLin": "bin/opendeck-mediaknob-linux-x86_64",
+	"OS": [
+		{ "Platform": "mac", "MinimumVersion": "11.0" },
+		{ "Platform": "linux" }
+	],
+	"Software": { "MinimumVersion": "6.5" },
+	"Actions": [
+		{
+			"UUID": "io.github.gauravk-in.mediaknob.knob",
+			"Name": "Media knob",
+			"Tooltip": "Turn for volume, seek or tracks; press for play/pause or mute",
+			"Icon": "icons/knob",
+			"PropertyInspectorPath": "propertyInspector/settings.html",
+			"Controllers": ["Encoder", "Keypad"],
+			"SupportedInMultiActions": false,
+			"Encoder": {
+				"Icon": "icons/knob",
+				"TriggerDescription": { "Rotate": "Volume, seek or track", "Push": "Play/pause or mute" }
+			},
+			"States": [{ "Image": "icons/knob", "TitleAlignment": "bottom", "FontSize": 14 }]
+		}
+	]
+}
