@@ -26,6 +26,7 @@ pub enum Kind {
     MSDTWO,
     TreasLinN3,
     RedragonSS551,
+    StreonorS6,
 }
 
 pub const AJAZZ_VID: u16 = 0x0300;
@@ -46,6 +47,7 @@ pub const C_2000_PID: u16 = 0x2000;
 pub const C_3001_PID: u16 = 0x3001;
 pub const C_3002_PID: u16 = 0x3002;
 pub const C_3003_PID: u16 = 0x3003;
+pub const C_3006_PID: u16 = 0x3006;
 
 // Map all queries to usage page 65440 and usage id 1 for now
 pub const AKP03_QUERY: DeviceQuery = DeviceQuery::new(65440, 1, AJAZZ_VID, C_1001_PID);
@@ -65,8 +67,9 @@ pub const SOOMFON_SE_QUERY: DeviceQuery = DeviceQuery::new(65440, 1, SOOMFON_VID
 pub const MSD_TWO_QUERY: DeviceQuery = DeviceQuery::new(65440, 1, MARS_GAMING_VID, C_1001_PID);
 pub const TREASLIN_QUERY: DeviceQuery = DeviceQuery::new(65440, 1, TREASLIN_VID, C_1001_PID);
 pub const REDRAGON_SS551_QUERY: DeviceQuery = DeviceQuery::new(65440, 1, REDRAGON_VID, C_2000_PID);
+pub const STREONOR_S6_QUERY: DeviceQuery = DeviceQuery::new(65440, 1, SOOMFON_VID, C_3006_PID);
 
-pub const QUERIES: [DeviceQuery; 13] = [
+pub const QUERIES: [DeviceQuery; 14] = [
     AKP03_QUERY,
     AKP03E_QUERY,
     AKP03R_QUERY,
@@ -80,6 +83,7 @@ pub const QUERIES: [DeviceQuery; 13] = [
     MSD_TWO_QUERY,
     TREASLIN_QUERY,
     REDRAGON_SS551_QUERY,
+    STREONOR_S6_QUERY,
 ];
 
 impl Kind {
@@ -109,6 +113,7 @@ impl Kind {
 
             SOOMFON_VID => match pid {
                 C_3001_PID => Some(Kind::SoomfonSE),
+                C_3006_PID => Some(Kind::StreonorS6),
                 _ => None,
             },
 
@@ -148,6 +153,7 @@ impl Kind {
             Self::MSDTWO => "Mars Gaming MSD-TWO",
             Self::TreasLinN3 => "TreasLin N3",
             Self::RedragonSS551 => "Redragon Skyrider SS-551",
+            Self::StreonorS6 => "Streonor S6",
         }
         .to_string()
     }
@@ -160,6 +166,7 @@ impl Kind {
             Self::SoomfonSE => 3,
             Self::TreasLinN3 => 3,
             Self::RedragonSS551 => 3,
+            Self::StreonorS6 => 3,
             _ => 2,
         }
     }
