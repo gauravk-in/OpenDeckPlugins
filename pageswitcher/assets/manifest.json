@@ -1,0 +1,61 @@
+{
+	"Name": "Page Switcher",
+	"Description": "Move between pages (profiles) in order with a dial or Next/Previous keys. Uses your own page order when OpenDeck has one.",
+	"Author": "gauravk-in",
+	"Version": "0.1.0",
+	"SDKVersion": 2,
+	"UUID": "io.github.gauravk-in.pageswitcher",
+	"URL": "https://github.com/gauravk-in/OpenDeckPlugins/tree/main/pageswitcher",
+	"Icon": "icons/plugin",
+	"Category": "Page Switcher",
+	"CategoryIcon": "icons/category",
+	"CodePaths": {
+		"x86_64-apple-darwin": "bin/opendeck-pageswitcher-mac",
+		"aarch64-apple-darwin": "bin/opendeck-pageswitcher-mac",
+		"x86_64-unknown-linux-gnu": "bin/opendeck-pageswitcher-linux-x86_64",
+		"aarch64-unknown-linux-gnu": "bin/opendeck-pageswitcher-linux-aarch64"
+	},
+	"CodePathMac": "bin/opendeck-pageswitcher-mac",
+	"CodePathLin": "bin/opendeck-pageswitcher-linux-x86_64",
+	"OS": [
+		{ "Platform": "mac", "MinimumVersion": "11.0" },
+		{ "Platform": "linux" }
+	],
+	"Software": { "MinimumVersion": "6.5" },
+	"Actions": [
+		{
+			"UUID": "io.github.gauravk-in.pageswitcher.dial",
+			"Name": "Page dial",
+			"Tooltip": "Turn for the next or previous page, press for the first page",
+			"Icon": "icons/dial",
+			"PropertyInspectorPath": "propertyInspector/settings.html",
+			"Controllers": ["Encoder"],
+			"SupportedInMultiActions": false,
+			"Encoder": {
+				"Icon": "icons/dial",
+				"TriggerDescription": { "Rotate": "Next / previous page", "Push": "First page" }
+			},
+			"States": [{ "Image": "icons/dial" }]
+		},
+		{
+			"UUID": "io.github.gauravk-in.pageswitcher.next",
+			"Name": "Next page",
+			"Tooltip": "Go to the next page",
+			"Icon": "icons/next",
+			"PropertyInspectorPath": "propertyInspector/settings.html",
+			"Controllers": ["Keypad", "Encoder"],
+			"SupportedInMultiActions": false,
+			"States": [{ "Image": "icons/next", "TitleAlignment": "bottom", "FontSize": 12 }]
+		},
+		{
+			"UUID": "io.github.gauravk-in.pageswitcher.previous",
+			"Name": "Previous page",
+			"Tooltip": "Go to the previous page",
+			"Icon": "icons/previous",
+			"PropertyInspectorPath": "propertyInspector/settings.html",
+			"Controllers": ["Keypad", "Encoder"],
+			"SupportedInMultiActions": false,
+			"States": [{ "Image": "icons/previous", "TitleAlignment": "bottom", "FontSize": 12 }]
+		}
+	]
+}
