@@ -1,0 +1,37 @@
+{
+	"Name": "Keyboard Shortcut",
+	"Description": "Press a keyboard shortcut (any key combo with Cmd, Ctrl, Alt or Shift) from a key or a knob. Record it by pressing it; the key shows the combo.",
+	"Author": "gauravk-in",
+	"Version": "0.1.0",
+	"SDKVersion": 2,
+	"UUID": "io.github.gauravk-in.shortcut",
+	"URL": "https://github.com/gauravk-in/OpenDeckPlugins/tree/main/shortcut",
+	"Icon": "icons/plugin",
+	"Category": "Keyboard Shortcut",
+	"CategoryIcon": "icons/category",
+	"CodePaths": {
+		"x86_64-apple-darwin": "bin/opendeck-shortcut-mac",
+		"aarch64-apple-darwin": "bin/opendeck-shortcut-mac",
+		"x86_64-unknown-linux-gnu": "bin/opendeck-shortcut-linux-x86_64",
+		"aarch64-unknown-linux-gnu": "bin/opendeck-shortcut-linux-aarch64"
+	},
+	"CodePathMac": "bin/opendeck-shortcut-mac",
+	"CodePathLin": "bin/opendeck-shortcut-linux-x86_64",
+	"OS": [
+		{ "Platform": "mac", "MinimumVersion": "11.0" },
+		{ "Platform": "linux" }
+	],
+	"Software": { "MinimumVersion": "6.5" },
+	"Actions": [
+		{
+			"UUID": "io.github.gauravk-in.shortcut.press",
+			"Name": "Shortcut",
+			"Tooltip": "Press a keyboard shortcut such as Cmd+Shift+4",
+			"Icon": "icons/action",
+			"PropertyInspectorPath": "propertyInspector/shortcut.html",
+			"Controllers": ["Keypad", "Encoder"],
+			"SupportedInMultiActions": true,
+			"States": [{ "Image": "icons/key", "ShowTitle": true }]
+		}
+	]
+}
