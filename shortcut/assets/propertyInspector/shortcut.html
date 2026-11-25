@@ -1,0 +1,386 @@
+<!doctype html>
+<html lang="en">
+	<head>
+		<meta charset="utf-8" />
+		<style>
+			:root {
+				color-scheme: light dark;
+				--fg: #e6e6e6;
+				--muted: #9a9a9a;
+				--field: #3d3d3d;
+				--border: #555;
+				--accent: #4f8ef7;
+				--bad: #f08080;
+				--good: #7ccf8a;
+			}
+			@media (prefers-color-scheme: light) {
+				:root { --fg: #222; --muted: #666; --field: #fff; --border: #bbb; --bad: #c0392b; --good: #2e8b57; }
+			}
+			body { margin: 0; padding: 8px 10px; font: 13px/1.4 system-ui, -apple-system, "Segoe UI", sans-serif; color: var(--fg); background: transparent; }
+			.row { display: flex; align-items: center; gap: 8px; margin: 6px 0; }
+			.row > label:first-child { flex: 0 0 96px; color: var(--muted); }
+			.row > .value { flex: 1; min-width: 0; display: flex; gap: 6px; align-items: center; }
+			input[type="text"], input[type="number"], select { flex: 1; min-width: 0; box-sizing: border-box; padding: 4px 6px; border-radius: 4px; border: 1px solid var(--border); background: var(--field); color: var(--fg); font: inherit; }
+			input.combo { font-family: ui-monospace, Menlo, monospace; }
+			input[type="number"] { flex: 0 0 64px; }
+			textarea { flex: 1; min-width: 0; box-sizing: border-box; padding: 4px 6px; border-radius: 4px; border: 1px solid var(--border); background: var(--field); color: var(--fg); font: inherit; resize: vertical; }
+			button { padding: 4px 10px; border-radius: 4px; border: 1px solid var(--border); background: var(--field); color: var(--fg); font: inherit; cursor: pointer; white-space: nowrap; }
+			button:hover { border-color: var(--accent); }
+			button.recording { border-color: var(--accent); background: var(--accent); color: #fff; }
+			.hint { color: var(--muted); font-size: 11px; margin: -2px 0 6px 104px; min-height: 1em; }
+			.hint .label { color: var(--fg); font-size: 13px; font-weight: 600; }
+			.hint.bad { color: var(--bad); }
+			#status { margin: 2px 0 8px; padding: 6px 8px; border-radius: 4px; border: 1px solid var(--border); font-size: 12px; display: none; }
+			#status.bad { display: block; color: var(--bad); border-color: var(--bad); }
+			#status.good { display: block; color: var(--good); border-color: transparent; padding: 0; }
+			#status button { margin-top: 6px; }
+			details { margin-top: 10px; }
+			summary { cursor: pointer; color: var(--muted); margin-bottom: 4px; }
+			details p, details li { color: var(--muted); font-size: 12px; }
+			details ul { padding-left: 18px; margin: 4px 0; }
+			code { font-family: ui-monospace, Menlo, monospace; font-size: 12px; }
+		</style>
+		<script>
+			let websocket = null;
+			let actionInfo = null;
+			let platform = navigator.platform.toLowerCase().includes("mac") ? "mac" : "linux";
+			const $ = (id) => document.getElementById(id);
+			const FIELDS = ["shortcut", "clockwise", "anticlockwise"];
+
+			// KeyboardEvent.code -> the plugin's key names (physical keys, US names).
+			const CODES = {
+				Minus: "minus", Equal: "equal", BracketLeft: "leftbracket", BracketRight: "rightbracket", Backslash: "backslash",
+				Semicolon: "semicolon", Quote: "quote", Comma: "comma", Period: "period", Slash: "slash", Backquote: "grave",
+				IntlBackslash: "section", Enter: "enter", Tab: "tab", Space: "space", Backspace: "backspace", Delete: "delete",
+				Escape: "escape", Insert: "insert", Help: "insert", Home: "home", End: "end", PageUp: "pageup", PageDown: "pagedown",
+				ArrowLeft: "left", ArrowRight: "right", ArrowUp: "up", ArrowDown: "down", CapsLock: "capslock",
+				PrintScreen: "f13", ScrollLock: "f14", Pause: "f15",
+				NumpadDecimal: "kpdecimal", NumpadAdd: "kpplus", NumpadSubtract: "kpminus", NumpadMultiply: "kpmultiply",
+				NumpadDivide: "kpdivide", NumpadEnter: "kpenter", NumpadEqual: "kpequal",
+			};
+			const MODIFIER_CODES = {
+				ControlLeft: "ctrl", ControlRight: "ctrl", AltLeft: "alt", AltRight: "alt",
+				ShiftLeft: "shift", ShiftRight: "shift", MetaLeft: "cmd", MetaRight: "cmd", OSLeft: "cmd", OSRight: "cmd",
+			};
+
+			function keyName(code) {
+				let m;
+				if ((m = /^Key([A-Z])$/.exec(code))) return m[1].toLowerCase();
+				if ((m = /^Digit(\d)$/.exec(code))) return m[1];
+				if ((m = /^Numpad(\d)$/.exec(code))) return "kp" + m[1];
+				if ((m = /^F(\d+)$/.exec(code)) && Number(m[1]) <= 20) return "f" + m[1];
+				return CODES[code] ?? null;
+			}
+
+			function modsOf(e) {
+				const mods = [];
+				if (e.ctrlKey) mods.push("ctrl");
+				if (e.altKey) mods.push("alt");
+				if (e.shiftKey) mods.push("shift");
+				if (e.metaKey) mods.push("cmd");
+				return mods;
+			}
+
+			// ---------- Recording ----------
+			let rec = null; // { field, append, button, seen: Set of modifiers, done }
+
+			function startRecording(field, append) {
+				stopRecording();
+				const button = $(field + (append ? "-add" : "-rec"));
+				rec = { field, append, button, seen: new Set() };
+				button.classList.add("recording");
+				button.dataset.text = button.textContent;
+				button.textContent = "Press keys…";
+				button.focus();
+			}
+
+			function stopRecording() {
+				if (!rec) return;
+				rec.button.classList.remove("recording");
+				rec.button.textContent = rec.button.dataset.text;
+				rec = null;
+			}
+
+			function finish(combo) {
+				const input = $(rec.field);
+				const prev = input.value.trim();
+				input.value = rec.append && prev ? prev + " " + combo : combo;
+				stopRecording();
+				save();
+			}
+
+			document.addEventListener(
+				"keydown",
+				(e) => {
+					if (!rec) return;
+					e.preventDefault();
+					e.stopPropagation();
+					if (MODIFIER_CODES[e.code]) {
+						rec.seen.add(MODIFIER_CODES[e.code]);
+						rec.button.textContent = [...rec.seen].join("+") + "+…";
+						return;
+					}
+					const key = keyName(e.code);
+					if (!key) {
+						rec.button.textContent = "Unknown key, try again";
+						return;
+					}
+					finish([...modsOf(e), key].join("+"));
+				},
+				true,
+			);
+
+			document.addEventListener(
+				"keyup",
+				(e) => {
+					if (!rec) return;
+					e.preventDefault();
+					// Only modifiers were pressed and now all are up: record a modifier-only combo (e.g. hold Ctrl).
+					if (MODIFIER_CODES[e.code] && rec.seen.size && modsOf(e).length === 0) {
+						const order = ["ctrl", "alt", "shift", "cmd"];
+						finish(order.filter((m) => rec.seen.has(m)).join("+"));
+					}
+				},
+				true,
+			);
+
+			// ---------- Settings ----------
+			function settings() {
+				return {
+					shortcut: $("shortcut").value.trim(),
+					mode: $("mode").value,
+					repeat: Math.max(1, Math.min(50, Number($("repeat").value) || 1)),
+					clockwise: $("clockwise").value.trim(),
+					anticlockwise: $("anticlockwise").value.trim(),
+					showShortcut: true,
+					icon: $("icon").value,
+					iconText: $("iconText").value,
+					iconImage: iconImage,
+				};
+			}
+
+			// ---------- Icon ----------
+			let iconImage = "";
+
+			function showIconRows() {
+				const mode = $("icon").value;
+				$("iconTextRow").style.display = mode === "text" ? "" : "none";
+				$("iconImageRow").style.display = mode === "image" ? "" : "none";
+				$("iconHint").textContent = {
+					shortcut: "",
+					text: "Press Enter for a second line.",
+					image: iconImage ? "" : "Pick a PNG, JPEG or SVG. It is scaled to fit the key.",
+					none: "The key shows OpenDeck's own image and title instead.",
+				}[mode];
+				$("iconPreview").src = iconImage;
+				$("iconPreview").style.display = iconImage ? "" : "none";
+				$("iconRemove").style.display = iconImage ? "" : "none";
+			}
+
+			// Scales the picked image to the key size, so the settings stay small.
+			function pickImage(input) {
+				const file = input.files[0];
+				input.value = "";
+				if (!file) return;
+				const reader = new FileReader();
+				reader.onload = () => {
+					const img = new Image();
+					img.onload = () => {
+						const size = 144;
+						const canvas = document.createElement("canvas");
+						canvas.width = canvas.height = size;
+						const ctx = canvas.getContext("2d");
+						const w = img.naturalWidth || size, h = img.naturalHeight || size;
+						const scale = Math.min(size / w, size / h);
+						ctx.imageSmoothingQuality = "high";
+						ctx.drawImage(img, (size - w * scale) / 2, (size - h * scale) / 2, w * scale, h * scale);
+						iconImage = canvas.toDataURL("image/png");
+						showIconRows();
+						save();
+					};
+					img.onerror = () => ($("iconHint").textContent = "That file could not be read as an image.");
+					img.src = reader.result;
+				};
+				reader.readAsDataURL(file);
+			}
+
+			function removeImage() {
+				iconImage = "";
+				showIconRows();
+				save();
+			}
+
+			function save() {
+				if (!websocket) return;
+				$("repeatRow").style.display = $("mode").value === "hold" ? "none" : "";
+				showIconRows();
+				websocket.send(JSON.stringify({ event: "setSettings", context: actionInfo.context, payload: settings() }));
+			}
+
+			function load(s) {
+				for (const f of FIELDS) if (document.activeElement !== $(f)) $(f).value = s[f] ?? "";
+				$("mode").value = s.mode === "hold" ? "hold" : "tap";
+				$("repeat").value = s.repeat ?? 1;
+				$("icon").value = s.icon || (s.showShortcut === false ? "none" : "shortcut");
+				if (document.activeElement !== $("iconText")) $("iconText").value = s.iconText ?? "";
+				iconImage = s.iconImage ?? "";
+				showIconRows();
+				$("repeatRow").style.display = $("mode").value === "hold" ? "none" : "";
+			}
+
+			function toPlugin(payload) {
+				websocket?.send(JSON.stringify({ event: "sendToPlugin", action: actionInfo.action, context: actionInfo.context, payload }));
+			}
+
+			function test(field) {
+				const b = $(field + "-test");
+				b.textContent = "Switch apps… 3 s";
+				setTimeout(() => (b.textContent = "Test"), 3500);
+				toPlugin({ action: "test", field });
+			}
+
+			function showField(name, info) {
+				const hint = $(name + "-hint");
+				hint.classList.toggle("bad", !!info.error);
+				if (info.error) hint.textContent = info.error;
+				else if (info.label) {
+					const span = document.createElement("span");
+					span.className = "label";
+					span.textContent = info.label;
+					hint.replaceChildren(span);
+				} else hint.textContent = name === "shortcut" ? "Click Record and press the shortcut, or type it like cmd+shift+4." : "";
+			}
+
+			function showStatus(st) {
+				const el = $("status");
+				el.className = st.ok ? "good" : "bad";
+				$("statusText").textContent = st.ok ? "" : st.text;
+				$("accessibility").style.display = !st.ok && platform === "mac" ? "" : "none";
+				$("recheck").style.display = st.ok ? "none" : "";
+			}
+
+			function connectElgatoStreamDeckSocket(inPort, inUUID, inRegisterEvent, inInfo, inActionInfo) {
+				actionInfo = JSON.parse(inActionInfo);
+				if (actionInfo.payload?.controller === "Encoder") {
+					$("encoder").style.display = "";
+					$("shortcut-label").textContent = "Press";
+				}
+				load(actionInfo.payload?.settings ?? {});
+				websocket = new WebSocket("ws://127.0.0.1:" + inPort);
+				websocket.onopen = () => websocket.send(JSON.stringify({ event: inRegisterEvent, uuid: inUUID }));
+				websocket.onmessage = (msg) => {
+					const data = JSON.parse(msg.data);
+					if (data.event === "sendToPropertyInspector") {
+						const p = data.payload ?? {};
+						if (p.platform) platform = p.platform;
+						if (p.status) showStatus(p.status);
+						if (p.fields) for (const [k, v] of Object.entries(p.fields)) showField(k, v);
+						if (p.tested) $(p.tested + "-test").textContent = "Sent ✓";
+					} else if (data.event === "didReceiveSettings") {
+						load(data.payload?.settings ?? {});
+					}
+				};
+			}
+			const connectOpenActionSocket = connectElgatoStreamDeckSocket;
+
+			window.addEventListener("DOMContentLoaded", () => {
+				for (const f of FIELDS) showField(f, {});
+			});
+		</script>
+	</head>
+	<body>
+		<div id="status">
+			<div id="statusText"></div>
+			<button id="accessibility" style="display: none" onclick="toPlugin({ action: 'openAccessibility' })">Open Accessibility settings</button>
+			<button id="recheck" onclick="toPlugin({ action: 'check' })">Check again</button>
+		</div>
+
+		<div class="row">
+			<label for="shortcut" id="shortcut-label">Shortcut</label>
+			<div class="value">
+				<input id="shortcut" class="combo" type="text" placeholder="cmd+shift+4" spellcheck="false" autocomplete="off" onchange="save()" />
+				<button id="shortcut-rec" onclick="startRecording('shortcut', false)" onblur="stopRecording()">Record</button>
+			</div>
+		</div>
+		<div class="hint" id="shortcut-hint"></div>
+		<div class="row">
+			<label></label>
+			<div class="value">
+				<button id="shortcut-add" onclick="startRecording('shortcut', true)" onblur="stopRecording()" title="Record another combo to press after this one, like ctrl+k then ctrl+s">+ Then…</button>
+				<button id="shortcut-test" onclick="test('shortcut')" title="Sends the shortcut after 3 seconds, so you can click into the target app first">Test</button>
+			</div>
+		</div>
+
+		<div class="row">
+			<label for="mode">When pressed</label>
+			<div class="value">
+				<select id="mode" onchange="save()">
+					<option value="tap">Press the shortcut once</option>
+					<option value="hold">Hold it down while I hold the key</option>
+				</select>
+			</div>
+		</div>
+		<div class="row" id="repeatRow">
+			<label for="repeat">Repeat</label>
+			<div class="value"><input id="repeat" type="number" min="1" max="50" value="1" onchange="save()" /> <span style="color: var(--muted)">times</span></div>
+		</div>
+
+		<div id="encoder" style="display: none">
+			<div class="row">
+				<label for="anticlockwise">Turn left</label>
+				<div class="value">
+					<input id="anticlockwise" class="combo" type="text" placeholder="cmd+minus" spellcheck="false" autocomplete="off" onchange="save()" />
+					<button id="anticlockwise-rec" onclick="startRecording('anticlockwise', false)" onblur="stopRecording()">Record</button>
+					<button id="anticlockwise-test" onclick="test('anticlockwise')">Test</button>
+				</div>
+			</div>
+			<div class="hint" id="anticlockwise-hint"></div>
+			<div class="row">
+				<label for="clockwise">Turn right</label>
+				<div class="value">
+					<input id="clockwise" class="combo" type="text" placeholder="cmd+equal" spellcheck="false" autocomplete="off" onchange="save()" />
+					<button id="clockwise-rec" onclick="startRecording('clockwise', false)" onblur="stopRecording()">Record</button>
+					<button id="clockwise-test" onclick="test('clockwise')">Test</button>
+				</div>
+			</div>
+			<div class="hint" id="clockwise-hint"></div>
+		</div>
+
+		<div class="row">
+			<label for="icon">Key shows</label>
+			<div class="value">
+				<select id="icon" onchange="save()">
+					<option value="shortcut">The shortcut</option>
+					<option value="text">My own text</option>
+					<option value="image">An image</option>
+					<option value="none">Nothing (OpenDeck's own icon)</option>
+				</select>
+			</div>
+		</div>
+		<div class="row" id="iconTextRow" style="display: none">
+			<label for="iconText">Text</label>
+			<div class="value"><textarea id="iconText" rows="2" placeholder="Screenshot" onchange="save()"></textarea></div>
+		</div>
+		<div class="row" id="iconImageRow" style="display: none">
+			<label>Image</label>
+			<div class="value">
+				<img id="iconPreview" alt="" style="width: 48px; height: 48px; border-radius: 6px; background: #000; display: none" />
+				<button onclick="$('iconFile').click()">Choose image…</button>
+				<button id="iconRemove" onclick="removeImage()" style="display: none">Remove</button>
+				<input id="iconFile" type="file" accept="image/*" style="display: none" onchange="pickImage(this)" />
+			</div>
+		</div>
+		<div class="hint" id="iconHint"></div>
+
+		<details>
+			<summary>Typing a shortcut</summary>
+			<ul>
+				<li>Join keys with <code>+</code>: <code>cmd+shift+4</code>, <code>ctrl+alt+t</code>. Separate combos pressed one after another with a space: <code>ctrl+k ctrl+s</code>.</li>
+				<li>Modifiers: <code>ctrl</code>, <code>alt</code> (Option), <code>shift</code>, <code>cmd</code> (Super / Windows key on Linux).</li>
+				<li>Keys: <code>a</code>–<code>z</code>, <code>0</code>–<code>9</code>, <code>f1</code>–<code>f20</code>, <code>enter</code>, <code>tab</code>, <code>space</code>, <code>backspace</code>, <code>delete</code>, <code>escape</code>, <code>up</code> <code>down</code> <code>left</code> <code>right</code>, <code>home</code>, <code>end</code>, <code>pageup</code>, <code>pagedown</code>, <code>minus</code>, <code>equal</code>, <code>[</code> <code>]</code> <code>;</code> <code>'</code> <code>,</code> <code>.</code> <code>/</code> <code>`</code> <code>\</code>, and <code>kp0</code>–<code>kp9</code> for the number pad.</li>
+				<li>Keys are positions on a US keyboard. On other layouts, record the shortcut instead of typing it.</li>
+				<li>Some shortcuts never reach this page because the system or OpenDeck takes them first (like Cmd+Tab, Cmd+Space or Cmd+Q). Type those instead of recording them.</li>
+			</ul>
+		</details>
+	</body>
+</html>

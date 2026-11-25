@@ -1,0 +1,9 @@
+# Lets the logged-in user (and members of the "input" group) create the virtual keyboard that the
+# OpenDeck Keyboard Shortcut plugin types with.
+#
+# Install:
+#   sudo cp 70-opendeck-shortcut.rules /etc/udev/rules.d/
+#   echo uinput | sudo tee /etc/modules-load.d/uinput.conf
+#   sudo modprobe uinput && sudo udevadm control --reload-rules && sudo udevadm trigger --name-match=uinput
+#   sudo usermod -aG input "$USER"     # then log out and in again
+KERNEL=="uinput", SUBSYSTEM=="misc", MODE="0660", GROUP="input", OPTIONS+="static_node=uinput", TAG+="uaccess"

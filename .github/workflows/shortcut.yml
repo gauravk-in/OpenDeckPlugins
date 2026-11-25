@@ -1,0 +1,48 @@
+name: Keyboard Shortcut
+
+on:
+  push:
+    branches: [main]
+    paths: ["shortcut/**", ".github/workflows/shortcut.yml"]
+    tags: ["shortcut-v*"]
+  pull_request:
+    paths: ["shortcut/**", ".github/workflows/shortcut.yml"]
+  workflow_dispatch:
+
+defaults:
+  run:
+    working-directory: shortcut
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: aarch64-unknown-linux-gnu,x86_64-unknown-linux-gnu,x86_64-apple-darwin,aarch64-apple-darwin
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: shortcut
+      - name: Install zig and cargo-zigbuild
+        run: |
+          pip install ziglang
+          cargo install --locked cargo-zigbuild
+      # The mac binary links ApplicationServices (CoreGraphics key events), so cross-linking it needs a macOS SDK.
+      - name: Fetch macOS SDK
+        run: |
+          curl -sSL https://github.com/joseluisq/macosx-sdks/releases/download/13.3/MacOSX13.3.sdk.tar.xz | tar xJ -C "$RUNNER_TEMP"
+          echo "SDKROOT=$RUNNER_TEMP/MacOSX13.3.sdk" >> "$GITHUB_ENV"
+      - name: Test
+        run: cargo test --release
+      - name: Package
+        run: scripts/package.sh
+      - uses: actions/upload-artifact@v4
+        with:
+          name: opendeck-shortcut-plugin
+          path: shortcut/dist/*.zip
+      - name: Release
+        if: startsWith(github.ref, 'refs/tags/shortcut-v')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: shortcut/dist/*.zip
