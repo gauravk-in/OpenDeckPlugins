@@ -75,6 +75,8 @@ unsafe extern "C" {
 	fn CGEventPost(tap: u32, event: *mut c_void);
 	fn AXIsProcessTrusted() -> bool;
 	fn AXIsProcessTrustedWithOptions(options: *const c_void) -> bool;
+	fn CGPreflightPostEventAccess() -> bool;
+	fn CGRequestPostEventAccess() -> bool;
 	static kAXTrustedCheckOptionPrompt: *const c_void;
 }
 
@@ -161,27 +163,36 @@ unsafe fn post_media_key(key: i64, down: bool) {
 
 static WARNED: AtomicBool = AtomicBool::new(false);
 
-/// Sends a media key if OpenDeck may send keys. Returns false when it may not.
-async fn media_key(key: i64) -> bool {
-	let mut trusted = unsafe { AXIsProcessTrusted() };
-	if !trusted && !WARNED.swap(true, Ordering::Relaxed) {
-		trusted = ask_for_accessibility();
-		log::warn!(
-			"OpenDeck is not allowed to send media keys. Allow it under System Settings > Privacy & Security > \
-			 Accessibility. Until then, Spotify and Music are controlled directly."
-		);
-	}
-	if !trusted {
-		log::info!("Media key {key} not sent: OpenDeck is not allowed under Accessibility");
-		return false;
-	}
+/// Whether macOS lets this process post keyboard events. Posting events is its own permission
+/// (CGPreflightPostEventAccess), shown under Accessibility; AXIsProcessTrusted is checked too since older
+/// macOS versions only know that one.
+fn may_post_events() -> bool {
+	unsafe { CGPreflightPostEventAccess() || AXIsProcessTrusted() }
+}
+
+/// Posts a media key press and release.
+async fn media_key(key: i64) {
 	log::info!("Sending media key {key}");
 	let _ = tokio::task::spawn_blocking(move || unsafe {
 		post_media_key(key, true);
 		post_media_key(key, false);
 	})
 	.await;
-	true
+}
+
+/// Logs (once) and asks macOS for permission when the checks say events may not be posted.
+fn check_permission() -> bool {
+	if may_post_events() {
+		return true;
+	}
+	if !WARNED.swap(true, Ordering::Relaxed) {
+		let asked = unsafe { CGRequestPostEventAccess() } || ask_for_accessibility();
+		log::warn!(
+			"macOS says OpenDeck may not send keys (asked again: {asked}). Allow OpenDeck under System Settings > \
+			 Privacy & Security > Accessibility; for a self-built OpenDeck, remove its entry and add the app again."
+		);
+	}
+	false
 }
 
 // ---------- Players (AppleScript) ----------
@@ -232,10 +243,18 @@ async fn tell_player(player: Player, command: &str) {
 }
 
 async fn transport(player: Player, key: i64, command: &str) {
-	if player == Player::Auto && media_key(key).await {
-		return;
+	if player != Player::Auto {
+		return tell_player(player, command).await;
 	}
-	tell_player(player, command).await
+	if !check_permission() {
+		// The check can be wrong for self-built apps whose entry was granted for an older build. Prefer telling
+		// Spotify or Music directly when one is open; otherwise send the key anyway, since it costs nothing.
+		if !open_apps(apps(player)).await.is_empty() {
+			return tell_player(player, command).await;
+		}
+		log::info!("No Spotify or Music open; sending media key {key} anyway");
+	}
+	media_key(key).await
 }
 
 pub async fn play_pause(player: Player) {
@@ -257,7 +276,12 @@ pub async fn seek(player: Player, seconds: i64) {
 }
 
 pub async fn list_players() {
-	println!("Accessibility allowed (media keys): {}", unsafe { AXIsProcessTrusted() });
+	println!(
+		"May post events: {} (CGPreflightPostEventAccess {}, AXIsProcessTrusted {})",
+		may_post_events(),
+		unsafe { CGPreflightPostEventAccess() },
+		unsafe { AXIsProcessTrusted() }
+	);
 	println!("Open players: {:?}", open_apps(&["Spotify", "Music"]).await);
 }
 
