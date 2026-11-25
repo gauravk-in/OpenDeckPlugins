@@ -49,7 +49,7 @@ The settings are the plugin's OpenDeck global settings:
 
 Anything that can set a plugin's global settings, such as the mobile config app through the OpenDeck fork's remote API, can configure the plugin. Changes apply live.
 
-If the OpenDeck fork's remote API is turned on (`<config>/remote.json`), the page is created through it. Otherwise the profile file is written to `<config>/profiles/<device>/Home Assistant.json`. OpenDeck loads a new profile the first time it is selected, so no restart is needed. A page you delete is not created again; use "Create Home Assistant page" in the settings to bring it back.
+If the OpenDeck fork's remote API is running (the plugin reads the token from `<config>/remote.json` and checks `GET /api/info`), the page is created through it. Otherwise the profile file is written to `<config>/profiles/<device>/Home Assistant.json`. OpenDeck loads a new profile the first time it is selected, so no restart is needed. A page you delete is not created again; use "Create Home Assistant page" in the settings to bring it back.
 
 ## Development
 

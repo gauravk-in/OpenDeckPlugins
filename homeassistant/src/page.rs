@@ -127,7 +127,11 @@ pub async fn ensure(device: &str, layout: &Layout) -> Outcome {
 	if created(&config).iter().any(|d| d == device) {
 		return Outcome::Skipped;
 	}
-	let made = match remote_api(&config) {
+	let api = match remote_api(&config) {
+		Some((port, token)) if api_authorised(port, &token).await => Some((port, token)),
+		_ => None,
+	};
+	let made = match api {
 		Some((port, token)) => match create_via_api(port, &token, device, layout).await {
 			Ok(()) => true,
 			Err(e) => {
@@ -163,22 +167,36 @@ fn write_file(path: &Path, layout: &Layout) -> bool {
 
 fn remote_api(config: &Path) -> Option<(u16, String)> {
 	let v: Value = serde_json::from_str(&fs::read_to_string(config.join("remote.json")).ok()?).ok()?;
-	// The remote API is opt-in; only use it when it is switched on.
-	if v.get("enabled") != Some(&json!(true)) {
-		return None;
-	}
+	// "enabled" may be false while the server runs (OpenDeck started with --remote), so whether the API is
+	// usable is decided by asking it (`api_authorised`).
 	let token = v.get("token")?.as_str()?.to_owned();
 	let port = v.get("port").and_then(Value::as_u64).unwrap_or(57200) as u16;
 	Some((port, token))
 }
 
-/// Minimal HTTP/1.1 POST to the fork's remote API on localhost (no HTTP client dependency needed).
+/// Whether the remote API is running and accepts the token (`GET /api/info` answers `"authorised": true`).
+async fn api_authorised(port: u16, token: &str) -> bool {
+	match http(port, token, "GET", "/api/info", "").await {
+		Ok(v) => v.get("authorised") == Some(&json!(true)),
+		Err(_) => false,
+	}
+}
+
 async fn rpc(port: u16, token: &str, cmd: &str, args: Value) -> Result<Value, String> {
+	let v = http(port, token, "POST", "/api/rpc", &json!({ "cmd": cmd, "args": args }).to_string()).await.map_err(|e| format!("{cmd}: {e}"))?;
+	if let Some(e) = v.get("error") {
+		return Err(format!("{cmd}: {e}"));
+	}
+	// Answers are `{ "ok": <result> }`.
+	Ok(v.get("ok").cloned().unwrap_or(v))
+}
+
+/// Minimal HTTP/1.1 request to the fork's remote API on localhost (no HTTP client dependency needed).
+async fn http(port: u16, token: &str, method: &str, path: &str, body: &str) -> Result<Value, String> {
 	use tokio::io::{AsyncReadExt, AsyncWriteExt};
-	let body = json!({ "cmd": cmd, "args": args }).to_string();
-	let mut stream = tokio::net::TcpStream::connect(("127.0.0.1", port)).await.map_err(|e| e.to_string())?;
+	let mut stream = tokio::time::timeout(std::time::Duration::from_secs(3), tokio::net::TcpStream::connect(("127.0.0.1", port))).await.map_err(|_| "timeout".to_string())?.map_err(|e| e.to_string())?;
 	let req = format!(
-		"POST /api/rpc HTTP/1.1\r\nHost: 127.0.0.1:{port}\r\nAuthorization: Bearer {token}\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{body}",
+		"{method} {path} HTTP/1.1\r\nHost: 127.0.0.1:{port}\r\nAuthorization: Bearer {token}\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{body}",
 		body.len()
 	);
 	stream.write_all(req.as_bytes()).await.map_err(|e| e.to_string())?;
@@ -187,16 +205,11 @@ async fn rpc(port: u16, token: &str, cmd: &str, args: Value) -> Result<Value, St
 	let text = String::from_utf8_lossy(&buf);
 	let (head, body) = text.split_once("\r\n\r\n").ok_or("bad response")?;
 	let status = head.split_whitespace().nth(1).unwrap_or("");
-	if !status.starts_with('2') {
-		return Err(format!("{cmd}: HTTP {status} {body}"));
+	if !status.starts_with('2') && status != "422" {
+		return Err(format!("HTTP {status} {body}"));
 	}
 	let body = if head.to_ascii_lowercase().contains("transfer-encoding: chunked") { dechunk(body) } else { body.to_owned() };
-	let v: Value = serde_json::from_str(&body).unwrap_or(Value::Null);
-	if let Some(e) = v.get("error") {
-		return Err(format!("{cmd}: {e}"));
-	}
-	// Answers are `{ "ok": <result> }`.
-	Ok(v.get("ok").cloned().unwrap_or(v))
+	Ok(serde_json::from_str(&body).unwrap_or(Value::Null))
 }
 
 fn dechunk(body: &str) -> String {
@@ -269,6 +282,9 @@ mod tests {
 		let Ok(spec) = std::env::var("MOCK_REMOTE") else { return };
 		let mut parts = spec.splitn(3, ':');
 		let (port, token, device) = (parts.next().unwrap().parse().unwrap(), parts.next().unwrap(), parts.next().unwrap());
+		assert!(api_authorised(port, token).await);
+		assert!(!api_authorised(port, "wrong").await);
+		assert!(!api_authorised(1, token).await);
 		create_via_api(port, token, device, &Layout::streonor_s6()).await.unwrap();
 		let profiles = rpc(port, token, "get_profiles", json!({ "device": device })).await.unwrap();
 		assert!(profiles.to_string().contains(PAGE_NAME), "{profiles}");
