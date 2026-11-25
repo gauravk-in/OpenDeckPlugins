@@ -5,6 +5,7 @@ Plugins for [OpenDeck](https://github.com/gauravk-in/OpenDeck), one per folder. 
 | Plugin | Folder | What it does |
 | --- | --- | --- |
 | Web Link | [`weblink/`](weblink) | Open a website with the site's logo on the key, optional caption, a chosen Chrome profile, and switching to an already-open tab on macOS |
+| Home Assistant Deck | [`homeassistant/`](homeassistant) | Home Assistant remote: rooms → devices → controls with knob support, timeout back to rooms, and a layout generated from your HA areas for the deck you have |
 | Page Switcher | [`pageswitcher/`](pageswitcher) | Move between pages (profiles) in order with a dial or Next/Previous keys |
 | Ajazz AKP03 / Mirabox N3 | [`opendeck-akp03/`](opendeck-akp03) | Device support for N3-family decks, including the Streonor S6. Copy of [4ndv/opendeck-akp03](https://github.com/4ndv/opendeck-akp03) v0.11.0 with S6 support and Raspberry Pi (ARM64) builds |
 
