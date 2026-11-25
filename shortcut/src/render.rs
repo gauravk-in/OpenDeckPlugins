@@ -117,6 +117,38 @@ pub fn lines_image(lines: &[String]) -> RgbaImage {
 	img
 }
 
+/// Breaks one line of free text into up to three lines of similar length, at spaces.
+fn wrap(text: &str) -> Vec<String> {
+	let words: Vec<&str> = text.split_whitespace().collect();
+	let total: usize = text.chars().count();
+	if words.len() < 2 || total <= 8 {
+		return vec![text.trim().to_owned()];
+	}
+	let rows = if total > 18 { 3 } else { 2 };
+	let target = total.div_ceil(rows);
+	let mut lines: Vec<String> = vec![String::new()];
+	for w in words {
+		let room = lines.len() < rows;
+		let cur = lines.last_mut().expect("never empty");
+		if !cur.is_empty() && cur.chars().count() + 1 + w.chars().count() > target && room {
+			lines.push(w.to_owned());
+		} else {
+			if !cur.is_empty() {
+				cur.push(' ');
+			}
+			cur.push_str(w);
+		}
+	}
+	lines
+}
+
+/// Draws the user's own text on the keycap. Explicit line breaks are kept; a single long line is wrapped.
+pub fn text_image(text: &str) -> RgbaImage {
+	let explicit: Vec<String> = text.lines().map(|l| l.trim().to_owned()).filter(|l| !l.is_empty()).collect();
+	let lines = if explicit.len() == 1 { wrap(&explicit[0]) } else { explicit };
+	lines_image(&lines)
+}
+
 pub fn to_png(img: &RgbaImage) -> Vec<u8> {
 	let mut out = std::io::Cursor::new(Vec::new());
 	img.write_to(&mut out, image::ImageFormat::Png).expect("PNG encoding");
@@ -125,4 +157,16 @@ pub fn to_png(img: &RgbaImage) -> Vec<u8> {
 
 pub fn data_url(png: &[u8]) -> String {
 	format!("data:image/png;base64,{}", base64::engine::general_purpose::STANDARD.encode(png))
+}
+
+#[cfg(test)]
+mod tests {
+	use super::*;
+
+	#[test]
+	fn wraps_long_text() {
+		assert_eq!(wrap("Mute"), vec!["Mute"]);
+		assert_eq!(wrap("Screen shot"), vec!["Screen", "shot"]);
+		assert_eq!(wrap("Open the team meeting room").len(), 3);
+	}
 }

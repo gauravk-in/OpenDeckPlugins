@@ -30,8 +30,10 @@ unsafe extern "C" {
 pub const SETTINGS_URL: &str = "x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility";
 
 const NOT_ALLOWED: &str = "macOS does not let OpenDeck send keys yet. Allow OpenDeck under System Settings > \
-	Privacy & Security > Accessibility. If it is already listed and switched on, remove it with the minus button \
-	and add it again: each new OpenDeck build needs its own entry. Then restart OpenDeck.";
+	Privacy & Security > Accessibility, then restart OpenDeck. If it is already listed, switching it off and on is \
+	not enough: remove it with the minus button and add it again, because each OpenDeck build needs its own entry. \
+	A self-built OpenDeck must also be signed first, or macOS ignores the entry: \
+	codesign --force --deep -s - \"/Applications/OpenDeck Pages.app\"";
 
 fn allowed() -> bool {
 	unsafe { CGPreflightPostEventAccess() || AXIsProcessTrusted() }

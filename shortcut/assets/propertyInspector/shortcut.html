@@ -23,6 +23,7 @@
 			input[type="text"], input[type="number"], select { flex: 1; min-width: 0; box-sizing: border-box; padding: 4px 6px; border-radius: 4px; border: 1px solid var(--border); background: var(--field); color: var(--fg); font: inherit; }
 			input.combo { font-family: ui-monospace, Menlo, monospace; }
 			input[type="number"] { flex: 0 0 64px; }
+			textarea { flex: 1; min-width: 0; box-sizing: border-box; padding: 4px 6px; border-radius: 4px; border: 1px solid var(--border); background: var(--field); color: var(--fg); font: inherit; resize: vertical; }
 			button { padding: 4px 10px; border-radius: 4px; border: 1px solid var(--border); background: var(--field); color: var(--fg); font: inherit; cursor: pointer; white-space: nowrap; }
 			button:hover { border-color: var(--accent); }
 			button.recording { border-color: var(--accent); background: var(--accent); color: #fff; }
@@ -151,13 +152,68 @@
 					repeat: Math.max(1, Math.min(50, Number($("repeat").value) || 1)),
 					clockwise: $("clockwise").value.trim(),
 					anticlockwise: $("anticlockwise").value.trim(),
-					showShortcut: $("showShortcut").checked,
+					showShortcut: true,
+					icon: $("icon").value,
+					iconText: $("iconText").value,
+					iconImage: iconImage,
 				};
+			}
+
+			// ---------- Icon ----------
+			let iconImage = "";
+
+			function showIconRows() {
+				const mode = $("icon").value;
+				$("iconTextRow").style.display = mode === "text" ? "" : "none";
+				$("iconImageRow").style.display = mode === "image" ? "" : "none";
+				$("iconHint").textContent = {
+					shortcut: "",
+					text: "Press Enter for a second line.",
+					image: iconImage ? "" : "Pick a PNG, JPEG or SVG. It is scaled to fit the key.",
+					none: "The key shows OpenDeck's own image and title instead.",
+				}[mode];
+				$("iconPreview").src = iconImage;
+				$("iconPreview").style.display = iconImage ? "" : "none";
+				$("iconRemove").style.display = iconImage ? "" : "none";
+			}
+
+			// Scales the picked image to the key size, so the settings stay small.
+			function pickImage(input) {
+				const file = input.files[0];
+				input.value = "";
+				if (!file) return;
+				const reader = new FileReader();
+				reader.onload = () => {
+					const img = new Image();
+					img.onload = () => {
+						const size = 144;
+						const canvas = document.createElement("canvas");
+						canvas.width = canvas.height = size;
+						const ctx = canvas.getContext("2d");
+						const w = img.naturalWidth || size, h = img.naturalHeight || size;
+						const scale = Math.min(size / w, size / h);
+						ctx.imageSmoothingQuality = "high";
+						ctx.drawImage(img, (size - w * scale) / 2, (size - h * scale) / 2, w * scale, h * scale);
+						iconImage = canvas.toDataURL("image/png");
+						showIconRows();
+						save();
+					};
+					img.onerror = () => ($("iconHint").textContent = "That file could not be read as an image.");
+					img.src = reader.result;
+				};
+				reader.readAsDataURL(file);
+			}
+
+			function removeImage() {
+				iconImage = "";
+				showIconRows();
+				save();
 			}
 
 			function save() {
 				if (!websocket) return;
 				$("repeatRow").style.display = $("mode").value === "hold" ? "none" : "";
+				showIconRows();
 				websocket.send(JSON.stringify({ event: "setSettings", context: actionInfo.context, payload: settings() }));
 			}
 
@@ -165,7 +221,10 @@
 				for (const f of FIELDS) if (document.activeElement !== $(f)) $(f).value = s[f] ?? "";
 				$("mode").value = s.mode === "hold" ? "hold" : "tap";
 				$("repeat").value = s.repeat ?? 1;
-				$("showShortcut").checked = s.showShortcut ?? true;
+				$("icon").value = s.icon || (s.showShortcut === false ? "none" : "shortcut");
+				if (document.activeElement !== $("iconText")) $("iconText").value = s.iconText ?? "";
+				iconImage = s.iconImage ?? "";
+				showIconRows();
 				$("repeatRow").style.display = $("mode").value === "hold" ? "none" : "";
 			}
 
@@ -288,10 +347,30 @@
 		</div>
 
 		<div class="row">
-			<label></label>
-			<div class="value"><label><input id="showShortcut" type="checkbox" checked onchange="save()" /> Show the shortcut on the key</label></div>
+			<label for="icon">Key shows</label>
+			<div class="value">
+				<select id="icon" onchange="save()">
+					<option value="shortcut">The shortcut</option>
+					<option value="text">My own text</option>
+					<option value="image">An image</option>
+					<option value="none">Nothing (OpenDeck's own icon)</option>
+				</select>
+			</div>
 		</div>
-		<div class="hint">Turn this off to use your own icon or title instead.</div>
+		<div class="row" id="iconTextRow" style="display: none">
+			<label for="iconText">Text</label>
+			<div class="value"><textarea id="iconText" rows="2" placeholder="Screenshot" onchange="save()"></textarea></div>
+		</div>
+		<div class="row" id="iconImageRow" style="display: none">
+			<label>Image</label>
+			<div class="value">
+				<img id="iconPreview" alt="" style="width: 48px; height: 48px; border-radius: 6px; background: #000; display: none" />
+				<button onclick="$('iconFile').click()">Choose image…</button>
+				<button id="iconRemove" onclick="removeImage()" style="display: none">Remove</button>
+				<input id="iconFile" type="file" accept="image/*" style="display: none" onchange="pickImage(this)" />
+			</div>
+		</div>
+		<div class="hint" id="iconHint"></div>
 
 		<details>
 			<summary>Typing a shortcut</summary>

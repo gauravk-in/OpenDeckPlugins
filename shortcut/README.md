@@ -3,7 +3,7 @@
 An OpenDeck plugin that presses a keyboard shortcut (any key combo with Cmd, Ctrl, Alt or Shift) from a key or a knob. Works on macOS and Linux, including Raspberry Pi (ARM64), under X11 and Wayland.
 
 - **Record it**: click *Record* and press the shortcut, or type it like `cmd+shift+4`.
-- **The key shows the combo** on a keycap (`⇧⌘4` on a Mac, `Ctrl+Alt+T` on Linux). Turn this off to use your own icon or title.
+- **The key shows the combo** on a keycap (`⇧⌘4` on a Mac, `Ctrl+Alt+T` on Linux), or your own text (line breaks kept, long text wrapped), or an image you pick (PNG, JPEG, SVG; scaled to 144×144 and stored in the key's settings). *Nothing* leaves the key to OpenDeck's own image and title.
 - **Sequences**: `ctrl+k ctrl+s` presses one combo after the other (*+ Then…* records the next one).
 - **Hold**: keeps the combo down for as long as you hold the key, for push-to-talk and the like. Modifier-only combos like `ctrl` work too.
 - **Repeat**: tap the shortcut several times per press.
@@ -18,7 +18,16 @@ Download `opendeck-shortcut.zip` and install it in OpenDeck with *Plugins > Inst
 
 macOS only delivers key presses from apps you allow. The first time a shortcut runs, macOS asks whether OpenDeck may control the computer. Allow it under **System Settings > Privacy & Security > Accessibility**, then restart OpenDeck. The plugin's settings show a warning and an *Open Accessibility settings* button while this is missing.
 
-The permission belongs to the OpenDeck app, not to the plugin, and macOS ties it to the app's exact build. If you run your own OpenDeck build, or update it, an older entry in the list (even switched on) no longer counts: select it, remove it with the minus button, and add the OpenDeck you are running now (or press a shortcut key again to get the prompt).
+The permission belongs to the OpenDeck app, not to the plugin, and macOS ties it to the app's exact build and signature. If you run your own OpenDeck build (or update it):
+
+1. Ad-hoc sign the app, or macOS ignores its Accessibility entry even when it is switched on:
+   ```sh
+   codesign --force --deep -s - "/Applications/OpenDeck Pages.app"
+   ```
+2. In the Accessibility list, select every old OpenDeck entry and remove it with the minus button. Switching an entry off and on is not enough.
+3. Add the app again with the plus button (or press a shortcut key to get the macOS prompt), and restart OpenDeck.
+
+Repeat this after every rebuild.
 
 ### Linux and Raspberry Pi: allow /dev/uinput
 

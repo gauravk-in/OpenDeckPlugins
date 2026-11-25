@@ -33,9 +33,25 @@ pub struct Settings {
 	/// Knobs: pressed once per step when turned right / left.
 	pub clockwise: String,
 	pub anticlockwise: String,
-	/// Draw the shortcut on the key.
+	/// Draw the shortcut on the key (older setting; `icon` wins when set).
 	#[serde(default = "default_true")]
 	pub show_shortcut: bool,
+	/// What the key shows: "shortcut", "text", "image" or "none" (OpenDeck's own image and title).
+	pub icon: String,
+	/// Text for icon "text". Line breaks are kept.
+	pub icon_text: String,
+	/// Image for icon "image", as a data URL (the settings page scales it to 144x144).
+	pub icon_image: String,
+}
+
+impl Settings {
+	pub fn icon_mode(&self) -> &str {
+		match self.icon.as_str() {
+			"" if self.show_shortcut => "shortcut",
+			"" => "none",
+			m => m,
+		}
+	}
 }
 
 impl Default for Settings {
@@ -47,6 +63,9 @@ impl Default for Settings {
 			clockwise: String::new(),
 			anticlockwise: String::new(),
 			show_shortcut: true,
+			icon: String::new(),
+			icon_text: String::new(),
+			icon_image: String::new(),
 		}
 	}
 }
@@ -87,12 +106,18 @@ async fn draw(instance: &Instance, s: &Settings) {
 		return;
 	}
 	DRAWN.insert(instance.instance_id.clone(), s.clone());
-	let lines = image_lines(instance, s);
-	let image = if s.show_shortcut && !lines.is_empty() {
-		let img = if lines.len() == 1 { render::shortcut_image(&lines[0]) } else { render::lines_image(&lines) };
-		Some(render::data_url(&render::to_png(&img)))
-	} else {
-		None
+	let image = match s.icon_mode() {
+		"text" if !s.icon_text.trim().is_empty() => Some(render::data_url(&render::to_png(&render::text_image(&s.icon_text)))),
+		"image" if s.icon_image.starts_with("data:image/") => Some(s.icon_image.clone()),
+		"shortcut" => {
+			let lines = image_lines(instance, s);
+			match lines.len() {
+				0 => None,
+				1 => Some(render::data_url(&render::to_png(&render::shortcut_image(&lines[0])))),
+				_ => Some(render::data_url(&render::to_png(&render::lines_image(&lines)))),
+			}
+		}
+		_ => None,
 	};
 	if let Err(e) = instance.set_image(image, None).await {
 		warn!("set_image failed: {e}");

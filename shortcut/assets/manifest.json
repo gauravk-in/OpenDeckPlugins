@@ -2,7 +2,7 @@
 	"Name": "Keyboard Shortcut",
 	"Description": "Press a keyboard shortcut (any key combo with Cmd, Ctrl, Alt or Shift) from a key or a knob. Record it by pressing it; the key shows the combo.",
 	"Author": "gauravk-in",
-	"Version": "0.1.0",
+	"Version": "0.2.0",
 	"SDKVersion": 2,
 	"UUID": "io.github.gauravk-in.shortcut",
 	"URL": "https://github.com/gauravk-in/OpenDeckPlugins/tree/main/shortcut",
