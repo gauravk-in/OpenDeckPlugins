@@ -97,6 +97,8 @@ static SHOWN: LazyLock<Mutex<HashMap<String, Settings>>> = LazyLock::new(|| Mute
 struct Hold {
 	down: bool,
 	turned: bool,
+	/// The press already ran on the way down.
+	fired: bool,
 }
 static HOLD: LazyLock<Mutex<HashMap<String, Hold>>> = LazyLock::new(|| Mutex::new(HashMap::new()));
 
@@ -203,6 +205,7 @@ fn turn(kind: &str, settings: &Settings, ticks: i16) {
 }
 
 fn press(settings: &Settings) {
+	log::info!("Press action: {} (player {})", settings.press, settings.player);
 	let player = settings.player();
 	match settings.press.as_str() {
 		"playPause" => enqueue(Command::PlayPause(player)),
@@ -277,20 +280,29 @@ impl Action for KnobAction {
 		Ok(())
 	}
 
-	async fn dial_down(&self, instance: &Instance, _settings: &Settings) -> OpenActionResult<()> {
-		HOLD.lock().unwrap().insert(instance.instance_id.clone(), Hold { down: true, turned: false });
-		Ok(())
-	}
-
-	async fn dial_up(&self, instance: &Instance, settings: &Settings) -> OpenActionResult<()> {
-		let turned = HOLD.lock().unwrap().remove(&instance.instance_id).is_some_and(|h| h.turned);
-		if !turned {
+	// Without a "turning while held" mode the press runs on the way down: it feels quicker, and it still works
+	// when a device does not report the release. With one, it waits for the release to know it was a press.
+	async fn dial_down(&self, instance: &Instance, settings: &Settings) -> OpenActionResult<()> {
+		log::info!("Knob {} pressed", instance.instance_id);
+		let fired = settings.press_rotate == "none";
+		HOLD.lock().unwrap().insert(instance.instance_id.clone(), Hold { down: true, turned: false, fired });
+		if fired {
 			press(settings);
 		}
 		Ok(())
 	}
 
-	async fn key_up(&self, _instance: &Instance, settings: &Settings) -> OpenActionResult<()> {
+	async fn dial_up(&self, instance: &Instance, settings: &Settings) -> OpenActionResult<()> {
+		log::info!("Knob {} released", instance.instance_id);
+		let skip = HOLD.lock().unwrap().remove(&instance.instance_id).is_some_and(|h| h.turned || h.fired);
+		if !skip {
+			press(settings);
+		}
+		Ok(())
+	}
+
+	async fn key_up(&self, instance: &Instance, settings: &Settings) -> OpenActionResult<()> {
+		log::info!("Key {} pressed", instance.instance_id);
 		press(settings);
 		Ok(())
 	}

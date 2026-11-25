@@ -172,8 +172,10 @@ async fn media_key(key: i64) -> bool {
 		);
 	}
 	if !trusted {
+		log::info!("Media key {key} not sent: OpenDeck is not allowed under Accessibility");
 		return false;
 	}
+	log::info!("Sending media key {key}");
 	let _ = tokio::task::spawn_blocking(move || unsafe {
 		post_media_key(key, true);
 		post_media_key(key, false);
@@ -225,7 +227,7 @@ async fn tell_player(player: Player, command: &str) {
 		return;
 	}
 	if let Some(app) = osascript(&player_script(&open, command)).await {
-		log::debug!("{command} sent to {app}");
+		log::info!("{command} sent to {app}");
 	}
 }
 
