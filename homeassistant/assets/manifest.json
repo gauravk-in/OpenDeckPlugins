@@ -1,0 +1,38 @@
+{
+	"Name": "Home Assistant Deck",
+	"Description": "Turns a deck into a Home Assistant remote: rooms, thermostats, lights, covers and media, with knob support and a layout built automatically from your Home Assistant areas.",
+	"Author": "gauravk-in",
+	"Version": "0.1.0.0",
+	"SDKVersion": 2,
+	"UUID": "io.github.gauravk-in.homeassistant",
+	"URL": "https://github.com/gauravk-in/OpenDeckPlugins/tree/main/homeassistant",
+	"Icon": "icons/plugin",
+	"Category": "Home Assistant",
+	"CategoryIcon": "icons/category",
+	"CodePaths": {
+		"x86_64-apple-darwin": "bin/opendeck-homeassistant-mac",
+		"aarch64-apple-darwin": "bin/opendeck-homeassistant-mac",
+		"x86_64-unknown-linux-gnu": "bin/opendeck-homeassistant-linux-x86_64",
+		"aarch64-unknown-linux-gnu": "bin/opendeck-homeassistant-linux-aarch64"
+	},
+	"CodePathMac": "bin/opendeck-homeassistant-mac",
+	"CodePathLin": "bin/opendeck-homeassistant-linux-x86_64",
+	"OS": [
+		{ "Platform": "mac", "MinimumVersion": "11.0" },
+		{ "Platform": "linux" }
+	],
+	"Software": { "MinimumVersion": "6.5" },
+	"Actions": [
+		{
+			"UUID": "io.github.gauravk-in.homeassistant.deck",
+			"Name": "Home Assistant Deck",
+			"Tooltip": "Put on every key and knob of a page (or use the auto-created \"Home Assistant\" page); the plugin draws rooms and devices on them",
+			"Icon": "icons/action",
+			"PropertyInspectorPath": "propertyInspector/settings.html",
+			"Controllers": ["Keypad", "Encoder"],
+			"SupportedInMultiActions": false,
+			"DisableAutomaticStates": true,
+			"States": [{ "Image": "icons/key", "ShowTitle": false }]
+		}
+	]
+}

@@ -1,0 +1,50 @@
+name: Home Assistant
+
+on:
+  push:
+    branches: [main]
+    paths: ["homeassistant/**", ".github/workflows/homeassistant.yml"]
+    tags: ["homeassistant-v*"]
+  pull_request:
+    paths: ["homeassistant/**", ".github/workflows/homeassistant.yml"]
+  workflow_dispatch:
+
+defaults:
+  run:
+    working-directory: homeassistant
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: aarch64-unknown-linux-gnu,x86_64-unknown-linux-gnu,x86_64-apple-darwin,aarch64-apple-darwin
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: homeassistant
+      - name: Install zig and cargo-zigbuild
+        run: |
+          pip install ziglang
+          cargo install --locked cargo-zigbuild
+      - name: Test
+        run: cargo test --release
+      - name: End-to-end test (fake OpenDeck + mock Home Assistant)
+        run: |
+          pip install websockets
+          cargo build --release
+          python3 tests/mock_ha.py 18123 > mock.log 2>&1 &
+          sleep 1
+          MOCK_LOG=mock.log python3 tests/fake_opendeck.py target/release/opendeck-homeassistant 18123
+      - name: Package
+        run: scripts/package.sh
+      - uses: actions/upload-artifact@v4
+        with:
+          name: opendeck-homeassistant-plugin
+          path: homeassistant/dist/*.zip
+      - name: Release
+        if: startsWith(github.ref, 'refs/tags/homeassistant-v')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: homeassistant/dist/*.zip
