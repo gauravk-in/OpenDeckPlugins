@@ -163,7 +163,8 @@ fn write_file(path: &Path, layout: &Layout) -> bool {
 
 fn remote_api(config: &Path) -> Option<(u16, String)> {
 	let v: Value = serde_json::from_str(&fs::read_to_string(config.join("remote.json")).ok()?).ok()?;
-	if v.get("enabled") == Some(&json!(false)) {
+	// The remote API is opt-in; only use it when it is switched on.
+	if v.get("enabled") != Some(&json!(true)) {
 		return None;
 	}
 	let token = v.get("token")?.as_str()?.to_owned();
@@ -190,7 +191,12 @@ async fn rpc(port: u16, token: &str, cmd: &str, args: Value) -> Result<Value, St
 		return Err(format!("{cmd}: HTTP {status} {body}"));
 	}
 	let body = if head.to_ascii_lowercase().contains("transfer-encoding: chunked") { dechunk(body) } else { body.to_owned() };
-	Ok(serde_json::from_str(&body).unwrap_or(Value::Null))
+	let v: Value = serde_json::from_str(&body).unwrap_or(Value::Null);
+	if let Some(e) = v.get("error") {
+		return Err(format!("{cmd}: {e}"));
+	}
+	// Answers are `{ "ok": <result> }`.
+	Ok(v.get("ok").cloned().unwrap_or(v))
 }
 
 fn dechunk(body: &str) -> String {
@@ -210,7 +216,6 @@ fn dechunk(body: &str) -> String {
 async fn create_via_api(port: u16, token: &str, device: &str, layout: &Layout) -> Result<(), String> {
 	// Our action as OpenDeck knows it (with absolute paths), from the action list.
 	let categories = rpc(port, token, "get_categories", json!({})).await?;
-	let categories = categories.get("result").cloned().unwrap_or(categories);
 	let action = categories
 		.as_object()
 		.into_iter()
@@ -255,6 +260,21 @@ mod tests {
 		assert_eq!(encoders_from_pages(&dir, "n3-ABC"), Some(3));
 		assert_eq!(encoders_from_pages(&dir, "other"), None);
 		fs::remove_dir_all(dir).unwrap();
+	}
+
+	/// Against the OpenDeck fork's mock remote server: `PORT=57299 node remote-ui/mock/server.mjs`, then
+	/// `MOCK_REMOTE=57299:mocktoken0123456789:<device id> cargo test remote_api -- --nocapture`.
+	#[tokio::test]
+	async fn remote_api_creates_page() {
+		let Ok(spec) = std::env::var("MOCK_REMOTE") else { return };
+		let mut parts = spec.splitn(3, ':');
+		let (port, token, device) = (parts.next().unwrap().parse().unwrap(), parts.next().unwrap(), parts.next().unwrap());
+		create_via_api(port, token, device, &Layout::streonor_s6()).await.unwrap();
+		let profiles = rpc(port, token, "get_profiles", json!({ "device": device })).await.unwrap();
+		assert!(profiles.to_string().contains(PAGE_NAME), "{profiles}");
+		let selected = rpc(port, token, "get_selected_profile", json!({ "device": device })).await.unwrap();
+		println!("{selected}");
+		assert!(selected.to_string().contains(ACTION_UUID));
 	}
 
 	#[test]
